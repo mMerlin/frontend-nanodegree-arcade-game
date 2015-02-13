@@ -24,11 +24,29 @@ Enemy.prototype.render = function() {
 // Now write your own player class
 // This class requires an update(), render() and
 // a handleInput() method.
+var Frog = function (icon) {
+  this.sprite = icon;
+  this.x = 200;
+  this.y = 200;
+};
 
+Frog.prototype.render = function () {
+  ctx.drawImage(Resources.get(this.sprite), this.x, this.y);
+};
+
+Frog.prototype.update = function () {
+  return undefined;//TODO: stub
+};
+
+Frog.prototype.handleInput = function () {
+  return undefined;//TODO: stub
+};
 
 // Now instantiate your objects.
 // Place all enemy objects in an array called allEnemies
 // Place the player object in a variable called player
+var allEnemies = [];//TODO: Stub
+var player = new Frog('images/char-boy.png');
 
 
 
