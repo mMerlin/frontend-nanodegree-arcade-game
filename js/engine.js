@@ -21,9 +21,54 @@
 // The body tag must be available.
 document.addEventListener('DOMContentLoaded', function () {
   'use strict';
-  var ns = window;// Namespace
+  var ns, field;
+  ns = window;// Namespace
+  /* This object holds all of the constant configuration information needed to
+   * work with the bare playing field (grid).
+   */
+  field = {
+    numRows : 6,// in the grid structure
+    numCols : 5,
+    /* This array holds the relative URL to the image used
+     * for that particular row of the game level.
+     * IDEA: should this, or whole config structure, be supplied by app.js?
+     *   app.js is going to need much of the same constants
+     */
+    rowImages : [
+      'images/water-block.png',   // Top row is water
+      'images/stone-block.png',   // Row 1 of 3 of stone
+      'images/stone-block.png',   // Row 2 of 3 of stone
+      'images/stone-block.png',   // Row 3 of 3 of stone
+      'images/grass-block.png',   // Row 1 of 2 of grass
+      'images/grass-block.png'    // Row 2 of 2 of grass
+    ],
+    /* The height is the height of the grid cell.  The tile images are bigger,
+     * but the display order means only the top row gets the top part shown, and
+     * only the bottom row gets the bottom part of the tile shown.  The tops are
+     * all transparent, to give good edge joins between rows.
+     */
+    rowHeight : 83,// in pixels
+    colWidth : 101,
+    tileHeight : 171,// full tile image height
+    bottomPadding : 20,
+    timeScaling : 1000.0,//milliseconds per second
+    gameTiles : [
+      'images/stone-block.png',
+      'images/water-block.png',
+      'images/grass-block.png',
+      'images/enemy-bug.png',
+      'images/char-boy.png'
+    ]
+  };
 
-  ns.Engine = (function (global) {
+  /* start the game engin processing loop.  Another anonymous function is used
+   * for this, but only as a convenience, to be able to pass an argument to it.
+   * TODO: flatten this code: the parameter is not really needed.  Just set
+   * global as a constant value, to get it in a single place.  The original
+   * 'this' value used is no longer the correct context, which is now 'document'
+   * due to using addEventListener to start things up.
+   */
+  (function (global) {
     /* Predefine the variables we'll be using within this scope,
      * create the canvas element, grab the 2D context for that canvas
      * set the canvas elements height/width and add it to the DOM.
@@ -35,8 +80,10 @@ document.addEventListener('DOMContentLoaded', function () {
     canvas = doc.createElement('canvas');
     ctx = canvas.getContext('2d');
 
-    canvas.width = 505;
-    canvas.height = 606;
+    canvas.width = field.numCols * field.colWidth;
+    canvas.height = ((field.numRows - 1) * field.rowHeight) +
+      field.tileHeight + field.bottomPadding;
+    canvas.style.cssText = "border: 1px solid red; background-color: aqua;";
     doc.body.appendChild(canvas);
 
     /* This function serves as the kickoff point for the game loop itself
@@ -49,8 +96,13 @@ document.addEventListener('DOMContentLoaded', function () {
        * would be the same for everyone (regardless of how fast their
        * computer is) - hurray time!
        */
-      var now = Date.now(),
-        dt = (now - lastTime) / 1000.0;
+      var now, dt;
+      now = Date.now();
+      /* Get the (fractional) number of seconds since the previous time that
+       * main was run.  Any timing based on dt will then be based on elapsed
+       * seconds.
+       */
+      dt = (now - lastTime) / field.timeScaling;
 
       /* Call our update/render functions, pass along the time delta to
        * our update function since it may be used for smooth animation.
@@ -114,28 +166,14 @@ document.addEventListener('DOMContentLoaded', function () {
      * they are just drawing the entire screen over and over.
      */
     render = function () {
-      /* This array holds the relative URL to the image used
-       * for that particular row of the game level.
-       */
-      var rowImages = [
-          'images/water-block.png',   // Top row is water
-          'images/stone-block.png',   // Row 1 of 3 of stone
-          'images/stone-block.png',   // Row 2 of 3 of stone
-          'images/stone-block.png',   // Row 3 of 3 of stone
-          'images/grass-block.png',   // Row 1 of 2 of grass
-          'images/grass-block.png'    // Row 2 of 2 of grass
-        ],
-        numRows = 6,
-        numCols = 5,
-        row,
-        col;
+      var row, col;
 
       /* Loop through the number of rows and columns we've defined above
        * and, using the rowImages array, draw the correct image for that
        * portion of the "grid"
        */
-      for (row = 0; row < numRows; row += 1) {
-        for (col = 0; col < numCols; col += 1) {
+      for (row = 0; row < field.numRows; row += 1) {
+        for (col = 0; col < field.numCols; col += 1) {
           /* The drawImage function of the canvas' context element
            * requires 3 parameters: the image to draw, the x coordinate
            * to start drawing and the y coordinate to start drawing.
@@ -143,7 +181,11 @@ document.addEventListener('DOMContentLoaded', function () {
            * so that we get the benefits of caching these images, since
            * we're using them over and over.
            */
-          ctx.drawImage(Resources.get(rowImages[row]), col * 101, row * 83);
+          ctx.drawImage(
+            Resources.get(field.rowImages[row]),
+            col * field.colWidth,
+            row * field.rowHeight
+          );
         }
       }
 
@@ -178,13 +220,7 @@ document.addEventListener('DOMContentLoaded', function () {
      * draw our game level. Then set init as the callback method, so that when
      * all of these images are properly loaded our game will start.
      */
-    Resources.load([
-      'images/stone-block.png',
-      'images/water-block.png',
-      'images/grass-block.png',
-      'images/enemy-bug.png',
-      'images/char-boy.png'
-    ]);
+    Resources.load(field.gameTiles);
     Resources.onReady(init);
 
     /* Assign the canvas' context object to the designated namespace so that
