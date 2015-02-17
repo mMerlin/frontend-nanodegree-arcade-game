@@ -1,5 +1,5 @@
 /*jslint browser: true, indent: 2, maxlen: 82 */
-/*global Resources, allEnemies, player */
+/*global Resources, CustomEvent */
 
 /* Engine.js
  * This file provides the game loop functionality (update entities and render),
@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', function () {
      * set the canvas elements height/width and add it to the DOM.
      */
     var doc, win, canvas, ctx, lastTime,
-      update, render, reset, updateEntities, renderEntities;
+      update, render, reset, updateEntities, renderEntities, rdyEvnt;
     doc = global.document;
     win = global.window;
     canvas = doc.createElement('canvas');
@@ -85,6 +85,19 @@ document.addEventListener('DOMContentLoaded', function () {
       field.tileHeight + field.bottomPadding;
     canvas.style.cssText = "border: 1px solid red; background-color: aqua;";
     doc.body.appendChild(canvas);
+
+    // The basic graphical environment is ready.  Let any interested parties
+    // know.
+    // TODO: If the configuration information is being passed through an object
+    // created in the engine’s namespace, an event trigger will not be needed.
+    // the configuratioin object can carry the callback function.
+    rdyEvnt = new CustomEvent("engineReady", {
+      "detail" : {
+        "message" : "Canvas exists",
+        "context" : ctx
+      }
+    });
+    document.dispatchEvent(rdyEvnt);
 
     /* This function serves as the kickoff point for the game loop itself
      * and handles properly calling the update and render methods.
@@ -153,10 +166,10 @@ document.addEventListener('DOMContentLoaded', function () {
      * render methods.
      */
     updateEntities = function (dt) {
-      allEnemies.forEach(function (enemy) {
+      ns.allEnemies.forEach(function (enemy) {
         enemy.update(dt);
       });
-      player.update();
+      ns.player.update();
     };
 
     /* This function initially draws the "game level", it will then call
@@ -201,11 +214,11 @@ document.addEventListener('DOMContentLoaded', function () {
       /* Loop through all of the objects within the allEnemies array and call
        * the render function you have defined.
        */
-      allEnemies.forEach(function (enemy) {
+      ns.allEnemies.forEach(function (enemy) {
         enemy.render();
       });
 
-      player.render();
+      ns.player.render();
     };
 
     /* This function does nothing but it could have been a good place to
@@ -226,7 +239,7 @@ document.addEventListener('DOMContentLoaded', function () {
     /* Assign the canvas' context object to the designated namespace so that
      * developer's can use it more easily from within their app.js files.
      */
-    ns.ctx = ctx;
+    // ns.ctx = ctx;
   }(window));
 
 });// ./DOMContentLoaded handler
