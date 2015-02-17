@@ -1,3 +1,15 @@
+This is a simplified version of the classical Frogger arcade game, implemented
+using html5 canvas and javascript.
+
+This demonstrates the use of:
+* pseudoclassical class pattern
+  * with hidden private data and methods
+* (nested) pseudoclassical subclassing
+* over-riding superclass methods
+* using superclass methods in subclassed prototype methods
+* function callbacks
+* smooth animation on html5 canvas
+
 frontend-nanodegree-arcade-game
 ===============================
 
