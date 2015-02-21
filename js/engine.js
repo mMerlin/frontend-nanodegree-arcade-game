@@ -1,4 +1,4 @@
-/*jslint browser: true, indent: 2, maxlen: 82 */
+/*jslint browser: true, devel: true, indent: 2, maxlen: 82 */
 /*global Resources, CustomEvent */
 
 /* Engine.js
@@ -19,9 +19,11 @@
 
 // Start things off when the DOM is ready.
 // The body tag must be available.
+console.log((new Date()).toISOString() + ' starting engine');
 document.addEventListener('DOMContentLoaded', function () {
   'use strict';
   var ns, field;
+  console.log((new Date()).toISOString() + ' caught DOMContentLoaded event');
   ns = window;// Namespace
   /* This object holds all of the constant configuration information needed to
    * work with the bare playing field (grid).
@@ -139,6 +141,7 @@ document.addEventListener('DOMContentLoaded', function () {
      * game loop.
      */
     function init() {
+      console.log((new Date()).toISOString() + ' resources loaded');
       reset();
       lastTime = Date.now();
       main();
@@ -233,6 +236,7 @@ document.addEventListener('DOMContentLoaded', function () {
      * draw our game level. Then set init as the callback method, so that when
      * all of these images are properly loaded our game will start.
      */
+    console.log((new Date()).toISOString() + ' starting resource loading');
     Resources.load(field.gameTiles);
     Resources.onReady(init);
 
