@@ -385,7 +385,7 @@
 
     //Make sure the command does not get processed again
     this.pendingCommand = null;
-  };
+  };// ./function Avatar.prototype.update()
 
 
   ////////////////////////////////////////////
@@ -559,8 +559,8 @@
      *     tail {Integer}     The index to the last (back, queued) sprite for
      *                        the row.  Ref as this.enemySprites[row][.tail]
      *     speed {Number}     Sprite movement rate in pixels per second
-     *     distances {Array of Integer} The circular buffer of distances
-     *                        (pixels) between successive sprites for the pattern
+     *     distances {Array of Number} Circular buffer of distances (sprite
+     *                        lengths) between successive sprites for the pattern
      *     nxtDistance {Integer} Index of the next distance[] to use
      *     cntDistances {Integer} distances[].length
      *     seconds {Number}   Time in seconds that the pattern lasts
@@ -597,7 +597,7 @@
                   "seconds" : 60,
                   "startDistance" : 0,
                   "speed" : 40,
-                  "distances" : [350]
+                  "distances" : [3.2]
                 }
               ]
             ]
@@ -718,7 +718,8 @@
     var rowState, distance;
     rowState = this.currentPatterns[row];
 
-    // The separation / following distance (pixels) for the next enemy sprite
+    // The separation / following distance (sprite lengths) for the next enemy
+    // sprite
     distance = rowState.distances[rowState.nxtDistance];
 
     // Point to the new next distance
@@ -729,7 +730,7 @@
     }
 
     return distance;
-  };
+  };// ./function Frogger.prototype.nextDistance()
 
   /**
    * Remove the sprite from the head of the circular buffer
@@ -934,7 +935,6 @@
     });
   };// ./function Frogger.prototype.start(cvsContext)
 
-
   /**
    * Change to next movement pattern when an active pattern expires
    *
@@ -1047,8 +1047,8 @@
         lastX = rowEnemies[rowState.tail].position.x;// Visible sprite position
         this.addSprite(row);// Pull a sprite from the recycled set.
         // Position it where it belongs (off canvas), and get it moving
-        rowEnemies[rowState.tail].position.x = lastX - this.nextDistance(row) -
-          this.GAME_BOARD.canvas.cellSize.width;
+        rowEnemies[rowState.tail].position.x = lastX -
+          (this.nextDistance(row) * this.GAME_BOARD.canvas.cellSize.width);
         rowEnemies[rowState.tail].speed = rowState.speed;
       }
     }// ./for (row = 0; row < this.currentPatterns.length; row += 1)
@@ -1193,4 +1193,4 @@
   // engine only works with objects passed to in the engingNs properties
   app.game = new Frogger();
 
-}());
+}());// ./function anonymous()
