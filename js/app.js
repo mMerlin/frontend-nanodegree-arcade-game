@@ -227,6 +227,29 @@
    */
   function Enemy(imgRsrc, gridRow, ofstVert, speed, cvsContext, gridCell) {
     Sprite.call(this, imgRsrc, undefined, undefined, cvsContext);
+
+    // Add getter/setter for speed, to automatically handle flipped state
+    Object.defineProperty(this, "speed", {
+      set : function (sp) {
+        this.privateSpeed = sp;
+        this.flipped = false;
+        if (sp < 0) {
+          // need to use a horizontally flipped sprite.  Or place (done here) on
+          // the canvas using a horizontally flipped coordinate system.
+          this.flipped = true;
+          // reversing X coordinates means the movement direction is reversed too.
+          this.privateSpeed = -sp;
+        }
+      },
+      get : function () { return this.privateSpeed; }
+    });
+
+    // TODO: replace row and col properties with getter/setters to automatically
+    // handle/call the gridColToX(), gridRowToY() methods: embed that logic, and
+    // get rid of the prototype functions
+    // NOTE: Other than debugging, no need to store row and col?  Just use to
+    //  set X, Y?  Enemy may not needed, but Avatar increments/decrements
+
     // Once placed, all current enemies stay on a specific grid row.
     this.row = gridRow || 0;
     this.rowOffset = ofstVert || 0;
@@ -241,15 +264,9 @@
       this.cell = { height : 0, width : 0 };
     }
     this.speed = speed || 0;// Pixels per second
-    if (speed < 0) {
-      // need to use a horizontally flipped sprite.  Or place (done here) on the
-      // canvas using a horizontally flipped coordinate system.
-      this.flipped = true;
-      // reversing X coordinates means the movement direction is reversed too.
-      this.speed = -speed;
-    }
     this.position = {};
     this.gridColRowToXY();
+
   }// ./function Enemy(imgRsrc, gridRow, ofstVert, speed, cvsContext, gridCell)
   Enemy.prototype = Object.create(Sprite.prototype);
   Enemy.prototype.constructor = Enemy;
@@ -586,12 +603,28 @@
       "enemy" : {
         "spriteTile" : "images/enemy-bug.png",
         "verticalOffset" : -20,
-        "maxSprites" : [3],
-        "topRow" : 3,
+        "maxSprites" : [3, 3, 3],
+        "topRow" : 1,
         "levels" : [
           {
             "length" : 60,
             "rows" : [
+              [
+                {
+                  "seconds" : 60,
+                  "startDistance" : 0,
+                  "speed" : 80,
+                  "distances" : [6, 1]
+                }
+              ],
+              [
+                {
+                  "seconds" : 60,
+                  "startDistance" : 0,
+                  "speed" : -40,
+                  "distances" : [3.2]
+                }
+              ],
               [
                 {
                   "seconds" : 60,
@@ -604,15 +637,17 @@
           }
         ],
         "reset" : {
-          "expires" : 0,
-          "currentPattern" : -1,
-          "head" : 0,
-          "tail" : 1,
-          "speed" : 0,
-          "distances" : [],
-          "nxtDistance" : 0,
-          "cntDistances" : 0,
-          "seconds" : 0
+          "expires" : { "writable": true, "configurable": true, "value": 0 },
+          "currentPattern" :
+            { "writable": true, "configurable": true, "value": -1 },
+          "head" : { "writable": true, "configurable": true, "value": 0 },
+          "tail" : { "writable": true, "configurable": true, "value": 1 },
+          "speed" : { "writable": true, "configurable": true, "value": 0 },
+          "distances" : { "writable": true, "configurable": true, "value": [] },
+          "nxtDistance" : { "writable": true, "configurable": true, "value": 0 },
+          "cntDistances" :
+            { "writable": true, "configurable": true, "value": 0 },
+          "seconds" : { "writable": true, "configurable": true, "value": 0 }
         }
       },
       "player" : {
@@ -782,6 +817,7 @@
     this.elapsedTime = 0;
     // Build the initial level pattern configuration for each enemy row.  See
     // this.APP_CONFIG.enemy.reset for entry property descriptions.
+    delete this.currentPatterns;
     this.currentPatterns = [];
     // Potentially, different levels could have different numbers of rows active?
     // All possible active rows (and sprites) always exists: set pattern for any
@@ -789,18 +825,17 @@
     for (row = 0; row < this.APP_CONFIG.enemy.maxSprites.length; row += 1) {
       // Fill in an initial dummy pattern that will be immediately updated with
       // the first actual pattern from lvlConfig.rows
-      this.currentPatterns.push(this.APP_CONFIG.enemy.reset);
+      this.currentPatterns.push(Object.create(null, this.APP_CONFIG.enemy.reset));
       // Get all sprites stopped and positioned so that the first update will
       // start the first pattern for the level
-      for (sprite = 1; sprite < this.APP_CONFIG.enemy.maxSprites[row];
+      for (sprite = 0; sprite < this.APP_CONFIG.enemy.maxSprites[row];
           sprite += 1
           ) {
         this.enemySprites[row][sprite].speed = 0;
         this.enemySprites[row][sprite].position.x = this.limits.queuedSpriteX;
       }
       // Move the first sprite for each row to just after the canvas
-      this.enemySprites[row][0].col = this.GAME_BOARD.canvas.gridCols;
-      this.enemySprites[row][0].gridColToX();
+      this.enemySprites[row][0].position.x = this.limits.recycleSpriteX;
     }
 
     // Move the player avatar back to the starting location
@@ -865,9 +900,6 @@
 
     // Fill in the CanvasRenderingContext2D for the tracker.
     this.tracker.context = cvsContext;
-    // TODO: trigger a pattern change on (or before?) the first tick
-    //cfg.rows[sprite].speed[0]
-    //this.tracker.update(0);
 
     // Setup the game state for the current (first = 0) level
     this.initLevel();
