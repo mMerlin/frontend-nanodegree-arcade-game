@@ -218,7 +218,7 @@
    * @param {string} imgRsrc      URL for the image file, which in this context
    *                    is the key to the cached image resource.
    * @param {Integer} gridRow     The logical grid row for the instance
-   * @param {Integer} ofstVert    The vertial (pixel) offset from the grid row
+   * @param {Integer} ofstVert    The vertical (pixel) offset from the grid row
    * @param {Number} speed        The sprite movement speed (pixels/second)
    * @param {Object} cvsContext The CanvasRenderingContext2D to display the
    *                    sprite on.
@@ -312,7 +312,7 @@
    *                    is the key to the cached image resource.
    * @param {Integer} gridRow     The logical grid row for the instance
    * @param {Integer} gridCol     The logical grid column for the instance
-   * @param {Integer} ofstVert    The vertial (pixel) offset from the grid row
+   * @param {Integer} ofstVert    The vertical (pixel) offset from the grid row
    * @param {Integer} ofstHoriz   The horizontal (pixel) offset from the grid
    *                              column
    * @param {Object} cvsContext The CanvasRenderingContext2D to display the
@@ -410,7 +410,7 @@
 
     /* NOTE: With the current application structure, only a single instance of
      * the Frogger class should ever need to be created.  That should avoid the
-     * memory leak associated with getting a new copy of all locally definded
+     * memory leak associated with getting a new copy of all locally defined
      * functions each time the Frogger function is called.  It should only
      * happen once, so only a single copy of the PaceCar related functions
      * should ever be created.
@@ -450,7 +450,7 @@
     /**
      * Handle display of non-sprite information.
      *
-     * This overrides the superclase render function.  This sub-classed sprite
+     * This overrides the superclass render function.  This sub-classed sprite
      * does not need to display 'itself'
      *
      * @return {undefined}
@@ -522,7 +522,7 @@
       }
     };// ./GAME_BOARD = {};
     /* Populate object properties with a bunch of constants needed by the
-     * running application, where they can all be refrenced and maintained in a
+     * running application, where they can all be referenced and maintained in a
      * single location.
      * This is intended to be constant information.  None of the contents are
      * are expected to be modified after the initial create / load.
@@ -537,7 +537,7 @@
      *                        needed simultaneously for each row.  This includes
      *                        The number that can be (partially) visible, plus
      *                        one off canvas (queued).  (Manually) calculated
-     *                        from: (minumum number of distance values where the
+     *                        from: (minimum number of distance values where the
      *                        sum > canvas width - one sprite width) +1
      *   topRow {Integer}     The first gird row (zero based) that enemies can
      *                        travel on.
@@ -547,7 +547,7 @@
      *                        complete the level (without dieing)
      *     delta {Object}     Values to adjust from previous level settings
      *       length {Number}  Change from previous level length
-     *     rows {Array}       One {Array} entry per enemy (traveled) grid row
+     *     rows {Array}       One {Array} entry per enemy (travelled) grid row
      *       {Array}          One {Object} entry per movement pattern used for
      *                        the level, row, and pattern
      *   reset {Object}       Pattern reset properties for every row, at the
@@ -562,9 +562,9 @@
      *     distances {Array of Integer} The circular buffer of distances
      *                        (pixels) between successive sprites for the pattern
      *     nxtDistance {Integer} Index of the next distance[] to use
-     *     cntDistances {Intenger} distances[].length
+     *     cntDistances {Integer} distances[].length
      *     seconds {Number}   Time in seconds that the pattern lasts
-     * enemey.levels[].rows[][] {Object} The 'rules' for a single pattern
+     * enemy.levels[].rows[][] {Object} The 'rules' for a single pattern
      *   seconds {Number}     How long the pattern lasts (once started)
      *   startDistance {Number} Pixel offset from last enemy in previous
      *                        pattern.  Zero will overlay on the last active
@@ -597,7 +597,7 @@
                   "seconds" : 60,
                   "startDistance" : 0,
                   "speed" : 40,
-                  "distances" : [200]
+                  "distances" : [350]
                 }
               ]
             ]
@@ -662,13 +662,14 @@
    * Get the index for the last (trailing) enemy sprite in a row
    *
    * NOTE: In some situations, the calculated index will be for a sprite that
-   * has already moved off of the visible canvas, and is ready to be recyled.
+   * has already moved off of the visible canvas, and is ready to be recycled.
    *
-   * @param {Intger} row      The row (index) number to locate the sprite in
+   * @param {Integer} row     The row (index) number to locate the sprite in
    * @return {Integer}
    */
   Frogger.prototype.lastVisible = function (row) {
-    var spriteIndex = this.currentPatterns[row].tail - 1;
+    var spriteIndex;
+    spriteIndex = this.currentPatterns[row].tail - 1;
     if (spriteIndex < 0) {
       spriteIndex = this.APP_CONFIG.enemy.maxSprites[row] - 1;
     }
@@ -678,16 +679,19 @@
   /**
    * Include one recycled sprite into the active portion of the circular buffer
    *
-   * @param {Intger} row      The row (index) number to locate the sprite in
+   * @param {Integer} row     The row (index) number to locate the sprite in
    * @return {undefined}
    */
   Frogger.prototype.addSprite = function (row) {
     var rowState;
     rowState = this.currentPatterns[row];
+
+    //rowState.tail = (rowState.tail + 1) % this.APP_CONFIG.enemy.maxSprites[row];
     rowState.tail += 1;
     if (rowState.tail >= this.APP_CONFIG.enemy.maxSprites[row]) {
       rowState.tail = 0;
     }
+
     // If there is reason to add another sprite at the end of the circular
     // buffer, and the sprite at the head of the buffer has exited the visible
     // playing field, it should be safe to recycle.
@@ -696,6 +700,7 @@
         ) {
       this.recycleSprite(row);
     }
+
     if (rowState.tail === rowState.head) {
       throw new Error('maxSprites value for row ' + row +
         ' too small for level ' + this.level
@@ -704,16 +709,44 @@
   };// ./function Frogger.prototype.addSprite(row)
 
   /**
+   * Cycle through the circular buffer of distances for the active pattern
+   *
+   * @param {Integer} row     The row (index) number the distances are for
+   * @return {Integer}
+   */
+  Frogger.prototype.nextDistance = function (row) {
+    var rowState, distance;
+    rowState = this.currentPatterns[row];
+
+    // The separation / following distance (pixels) for the next enemy sprite
+    distance = rowState.distances[rowState.nxtDistance];
+
+    // Point to the new next distance
+    // rowState.nxtDistance = (rowState.nxtDistance + 1) % rowState.cntDistances);
+    rowState.nxtDistance += 1;
+    if (rowState.nxtDistance >= rowState.cntDistances) {
+      rowState.nxtDistance = 0;
+    }
+
+    return distance;
+  };
+
+  /**
    * Remove the sprite from the head of the circular buffer
    *
-   * @param {Intger} row      The row (index) number to locate the sprite in
+   * @param {Integer} row     The row (index) number to the sprite is on
    * @return {undefined}
    */
   Frogger.prototype.recycleSprite = function (row) {
     var rowState;
     rowState = this.currentPatterns[row];
+
+    // Stop and queue the sprite
     this.enemySprites[row][rowState.head].speed = 0;
     this.enemySprites[row][rowState.head].position.x = this.limits.queuedSpriteX;
+
+    // Change the front sprite to the next one in the buffer.
+    //rowState.head = (rowState.head + 1) % this.APP_CONFIG.enemy.maxSprites[row];
     rowState.head += 1;
     if (rowState.head >= this.APP_CONFIG.enemy.maxSprites[row]) {
       rowState.head = 0;
@@ -724,7 +757,7 @@
    * Set the initial game state for the start of a level
    *
    * QUERY: Should this be a (function scope) helper function, instead of a
-   *  shared protype function? private vs possible inherit and override?
+   *  shared prototype function? private vs possible inherit and override?
    * @return {undefined}
    */
   Frogger.prototype.initLevel = function () {
@@ -816,7 +849,7 @@
       // Add the sprites for [row] to the collected sprites array
       this.enemySprites.push(rowSprites);
     }
-    // Grab the x coordinates that cooresponds to column -1, and the first grid
+    // Grab the x coordinates that corresponds to column -1, and the first grid
     // column after the visible grid, to check when sprites are not yet, or
     // no longer, visible.
     this.limits.queuedSpriteX = this.enemySprites[0][0].position.x;
@@ -843,16 +876,16 @@
     // - 'jump' to position(s) on canvas?
     // - 'zoom' with compressed time?
     // - 'fade in'?
-    // - start at column -1, and continue (no time advancee)
+    // - start at column -1, and continue (no time advance)
     //   - lock out controls till in position, so no 'open field' to start?
     // - initial load one enemy per row, positioned just page the width of the
-    //   canvase (IE just finished the pass, no longer visible).  Set the
+    //   canvas (IE just finished the pass, no longer visible).  Set the
     //   startDistance for the first pattern to be >= the canvas width
     //   - make that 2 enemies per row? One just off each side of the canvas,
     //     so the 'general' rule of updating the queued enemy can be applied
     //     get rid of special case handling on the update checks for the very
-    //     first time.  All handled by the pre-load, using straight configuation,
-    //     without needing any startup tests.
+    //     first time.  All handled by the pre-load, using straight
+    //     configuration, without needing any startup tests.
     // Level handling:
     // - things that could change between levels
     //   - time limit
@@ -901,31 +934,20 @@
     });
   };// ./function Frogger.prototype.start(cvsContext)
 
+
   /**
-   * Game state processing to do (at the start of) each animation frame
+   * Change to next movement pattern when an active pattern expires
    *
-   * @param {Number} deltaTime    (Fractional) seconds since previous update
    * @return {undefined}
    */
-  Frogger.prototype.next = function (deltaTime) {
-    var lvlConfig, rowConfig, ptrnConfig, row, rowState, vSprite, nSprite;
-    this.elapsedTime += deltaTime;
-
-    // Check for level time limit exceeded first
-    if (this.elapsedTime > this.levelTime) {
-      // Time has expired for the current level.  Avatar dies (from exposure)
-      // TODO: stub
-      console.log('Dieing from exposure @' + this.elapsedTime + ' on level ' +
-        this.level + ', with limit of ' + this.levelTime);
-      this.elapsedTime = 0;
-    }
-
-    // TODO: check for collisions next ???
-
-    // Check for expired patterns
+  Frogger.prototype.cycleEnemyPatterns = function () {
+    var lvlConfig, row, rowConfig, rowState, rowEnemies,
+      ptrnConfig, nSprite, vSprite;
     lvlConfig = this.APP_CONFIG.enemy.levels[this.level];
+
     for (row = 0; row < this.currentPatterns.length; row += 1) {
       rowState = this.currentPatterns[row];
+      rowEnemies = this.enemySprites[row];
       if (this.elapsedTime >= rowState.expires) {
         rowConfig = lvlConfig.rows[row];
         console.log('End pattern @' + rowState.expires + ' for level ' +
@@ -941,11 +963,11 @@
         if (rowState.currentPattern >= rowConfig.length) {
           rowState.currentPattern = 0;
         }
-        // Get the (immutable) confuration for the new pattern
+        // Get the (immutable) configuration for the new pattern
         ptrnConfig = rowConfig[rowState.currentPattern];
 
         // Update the active pattern with information from the configuration.
-        // All propteries are optional.  Any not specified will be carried over
+        // All properties are optional.  Any not specified will be carried over
         // from the previous pattern.
         if (ptrnConfig.speed) {// If the speed changes for this pattern
           // zero would be 'falsey', but that is not really a valid speed for
@@ -953,7 +975,7 @@
           rowState.speed = ptrnConfig.speed;
         }
         if (ptrnConfig.distances) {// if the sprite spacing changes
-          // TODO: decision: does the 'immutable' confguration need to be cloned
+          // TODO: decision: does the 'immutable' configuration need to be cloned
           //    or is is 'safe' to just reference it in place?
           // rowState.distances = ptrnConfig.distances.slice(0);
           rowState.distances = ptrnConfig.distances;
@@ -962,7 +984,7 @@
         if (ptrnConfig.seconds) {
           rowState.seconds = ptrnConfig.seconds;
         }
-        // NOTE: Design decsion: Do not adjust for the actual elapsed time.
+        // NOTE: Design decision: Do not adjust for the actual elapsed time.
         // rowState.expires = this.elapsedTime + rowState.seconds
         // Set the time when the new pattern ends, and the following one starts
         rowState.expires += rowState.seconds;
@@ -973,9 +995,7 @@
         if (ptrnConfig.startDistance === 0) {
           // Replace the last visible sprite from the previous pattern with
           // first (leading) sprite in the new pattern.
-          if (this.enemySprites[row][vSprite].position.x >=
-              this.limits.recycleSpriteX
-              ) {
+          if (rowEnemies[vSprite].position.x >= this.limits.recycleSpriteX) {
             // What should have been the last visible sprite has actually moved
             // off of the canvas.  Use the queued sprite instead.
             vSprite = rowState.tail;
@@ -984,9 +1004,9 @@
         } else {// !(ptrnConfig.startDistance === 0)
           // Place the leading sprite for the new pattern .startDistance behind
           // the last visible sprite from the previous pattern
-          if ((this.enemySprites[row][vSprite].position.x -
-              ptrnConfig.startDistance
-              ) > this.limits.queuedSpriteX) {
+          if ((rowEnemies[vSprite].position.x - ptrnConfig.startDistance) >
+              this.limits.queuedSpriteX
+              ) {
             // The targeted start point would teleport the sprite onto the
             // visible canvas: position it behind the queued sprite for the
             // previous pattern instead
@@ -994,14 +1014,14 @@
             // Pull another sprite into the active circular buffer of sprites
             this.addSprite(row);
           }
-          // Update the spirte (now) at the end of the circulare buffer to be
+          // Update the sprite (now) at the end of the circular buffer to be
           // a the configured starting distance behind the last visible sprite
           nSprite = rowState.tail;
-          this.enemySprites[row][nSprite].position.x =
-            this.enemySprites[row][vSprite].position.x - ptrnConfig.startDistance;
+          rowEnemies[nSprite].position.x =
+            rowEnemies[vSprite].position.x - ptrnConfig.startDistance;
         }
-        // Set the speed for the first spirte of the new pattern
-        this.enemySprites[row][nSprite].speed = rowState.speed;
+        // Set the speed for the first sprite of the new pattern
+        rowEnemies[nSprite].speed = rowState.speed;
 
         // TODO: 'intelligence' for switching patterns
         //  - make sure to keep enough info around for case where the distance
@@ -1009,11 +1029,63 @@
         //  - differences if speed changes
       }// ./if (this.elapsedTime >= rowState.expires)
     }// ./for (row = 0; row < this.currentPatterns.length; row += 1)
+  };// ./function Frogger.prototype.cycleEnemyPatterns()
+
+  /**
+   * Add enemies to the active queue when the current queued sprites become
+   * visible.
+   *
+   * @return {undefined}
+   */
+  Frogger.prototype.refreshEnemyQueues = function () {
+    var row, rowState, rowEnemies, lastX;
+    for (row = 0; row < this.currentPatterns.length; row += 1) {
+      rowState = this.currentPatterns[row];
+      rowEnemies = this.enemySprites[row];
+      if (rowEnemies[rowState.tail].position.x > this.limits.queuedSpriteX) {
+        // Current queued enemy sprite has become visible
+        lastX = rowEnemies[rowState.tail].position.x;// Visible sprite position
+        this.addSprite(row);// Pull a sprite from the recycled set.
+        // Position it where it belongs (off canvas), and get it moving
+        rowEnemies[rowState.tail].position.x = lastX - this.nextDistance(row) -
+          this.GAME_BOARD.canvas.cellSize.width;
+        rowEnemies[rowState.tail].speed = rowState.speed;
+      }
+    }// ./for (row = 0; row < this.currentPatterns.length; row += 1)
+  };// ./function Frogger.prototype.refreshEnemyQueues()
+
+  /**
+   * Game state processing to do (at the start of) each animation frame
+   *
+   * @param {Number} deltaTime    (Fractional) seconds since previous update
+   * @return {undefined}
+   */
+  Frogger.prototype.next = function (deltaTime) {
+    this.elapsedTime += deltaTime;
+
+    // Check for level time limit exceeded first
+    if (this.elapsedTime > this.levelTime) {
+      // Time has expired for the current level.  Avatar dies (from exposure)
+      // TODO: stub
+      console.log('Dieing from exposure @' + this.elapsedTime + ' on level ' +
+        this.level + ', with limit of ' + this.levelTime);
+      this.elapsedTime = 0;
+    }
+
+    // TODO: check for collisions next ???
+
+    // Check for expired patterns
+    this.cycleEnemyPatterns();
+
+    // Queue another enemy when the current queued enemy becomes visible
+    this.refreshEnemyQueues();
+
     // TODO: stuff…
     // - put any enemies that have finished the pass back in the pool (for the
     //   row)
-    // - queue up a new enemy before it is needed
-    //   - last active enemy position, - spacing distance
+    //   - need explicit? or just pickup when adding to queue?
+    //     - probably needs cleanup pass, so do not end up with multiple sprites
+    //       waiting to be recycled.
   };// ./function Frogger.prototype.next(deltaTime)
 
   /**
