@@ -209,6 +209,96 @@
   // Create Enemy (pseudoclassical) [sub]Class //
   ////////////////////////////////////////////////
 
+  // Shared functions that do not really belong in the prototype.  Using
+  // function scope instead.
+
+  /**
+   * Set the sprite speed, and adjust the orientation based on movement direction
+   *
+   * This is the set function for the speed property of Enemy class instances
+   *
+   * @param {Number} newSpeed     Pixels per Second
+   * @return {Number}
+   */
+  function setSpeed(newSpeed) {
+    this.privateSpeed = newSpeed;
+    this.flipped = false;
+    if (newSpeed < 0) {
+      // need to use a horizontally flipped sprite.  Or place (done here) on
+      // the canvas using a horizontally flipped coordinate system.
+      this.flipped = true;
+      // reversing X coordinates means the movement direction is reversed too.
+      this.privateSpeed = -newSpeed;
+    }
+    return this.privateSpeed;
+  }// ./function setSpeed(newSpeed)
+
+  /**
+   * Get the sprite speed.
+   *
+   * This will always be non-negative.  Reverse direction speeds are indicated
+   * by this.flipped being true.
+   *
+   * This is the get function for the speed property of Enemy class instances
+   *
+   * @return {Number}
+   */
+  function getSpeed() {
+    return this.privateSpeed;
+  }// ./function getSpeed()
+
+  /**
+   * Convert the logical grid column number to a canvas x (pixel) coordinate.
+   *
+   * @param {Integer} colNumber   The grid column for the sprite
+   * @return {Integer}
+   */
+  function setColumn(colNum) {
+    this.privateColumn = colNum;
+    this.position.x = (colNum * this.cell.width) + this.colOffset;
+    return this.privateColumn;
+  }// ./function setColumn(colNum)
+
+  /**
+   * Get the defined sprite column number.
+   *
+   * This may not be accurate.  It is the value that was previously set, but
+   * sprite movement could have altered the position away from the column.
+   *
+   * This is the get function for the col property of Enemy class instances
+   *
+   * @return {Number}
+   */
+  function getColumn() {
+    return this.privateColumn;
+  }// ./function getColumn()
+
+  /**
+   * Convert the logical grid row number to a canvas y (pixel) coordinate.
+   *
+   * @param {Integer} rowNumber   The grid row for the sprite
+   * @return {Integer}
+   */
+  function setRow(rowNum) {
+    this.privateRow = rowNum;
+    this.position.y = (rowNum * this.cell.height) + this.rowOffset;
+    return this.privateRow;
+  }// ./function setRow(rowNum)
+
+  /**
+   * Get the defined sprite row number.
+   *
+   * This may not be accurate.  It is the value that was previously set, but
+   * sprite movement could have altered the position away from the row.
+   *
+   * This is the get function for the row property of Enemy class instances
+   *
+   * @return {Number}
+   */
+  function getRow() {
+    return this.privateRow;
+  }// ./function getRow()
+
   /**
    * Enemy sprite class constructor function
    *
@@ -228,78 +318,39 @@
   function Enemy(imgRsrc, gridRow, ofstVert, speed, cvsContext, gridCell) {
     Sprite.call(this, imgRsrc, undefined, undefined, cvsContext);
 
-    // Add getter/setter for speed, to automatically handle flipped state
+    // Add get and set for properties where setting has side effects
     Object.defineProperty(this, "speed", {
-      set : function (sp) {
-        this.privateSpeed = sp;
-        this.flipped = false;
-        if (sp < 0) {
-          // need to use a horizontally flipped sprite.  Or place (done here) on
-          // the canvas using a horizontally flipped coordinate system.
-          this.flipped = true;
-          // reversing X coordinates means the movement direction is reversed too.
-          this.privateSpeed = -sp;
-        }
-      },
-      get : function () { return this.privateSpeed; }
+      set : setSpeed,
+      get : getSpeed
+    });
+    Object.defineProperty(this, "col", {
+      set : setColumn,
+      get : getColumn
+    });
+    Object.defineProperty(this, "row", {
+      set : setRow,
+      get : getRow
     });
 
-    // TODO: replace row and col properties with getter/setters to automatically
-    // handle/call the gridColToX(), gridRowToY() methods: embed that logic, and
-    // get rid of the prototype functions
-    // NOTE: Other than debugging, no need to store row and col?  Just use to
-    //  set X, Y?  Enemy may not needed, but Avatar increments/decrements
-
-    // Once placed, all current enemies stay on a specific grid row.
-    this.row = gridRow || 0;
-    this.rowOffset = ofstVert || 0;
-    // Always start an enemy sprite one grid column off (before the) canvas.
-    // With enemy sprite image tiles that are the same width as a grid column,
-    // that will place them just off of the visible canvas.
-    this.col = -1;
-    this.colOffset = 0;
+    this.position = {};
     if (gridCell) {
       this.cell = gridCell;
     } else {
       this.cell = { height : 0, width : 0 };
     }
-    this.speed = speed || 0;// Pixels per second
-    this.position = {};
-    this.gridColRowToXY();
 
+    // Once placed, all current enemies stay on a specific grid row.
+    this.rowOffset = ofstVert || 0;
+    this.row = gridRow || 0;
+    // Always start an enemy sprite one grid column off (before the) canvas.
+    // With enemy sprite image tiles that are the same width as a grid column,
+    // that will place them just off of the visible canvas.
+    this.colOffset = 0;
+    this.col = -1;
+    this.speed = speed || 0;// Pixels per second
   }// ./function Enemy(imgRsrc, gridRow, ofstVert, speed, cvsContext, gridCell)
   Enemy.prototype = Object.create(Sprite.prototype);
   Enemy.prototype.constructor = Enemy;
-
-  /**
-   * Convert the logical grid row number to a canvas y (pixel) coordinate.
-   *
-   * @return {undefined}
-   */
-  Enemy.prototype.gridRowToY = function () {
-    this.position.y = ((this.row || 0) * this.cell.height) +
-      (this.rowOffset || 0);
-  };// ./function Enemy.prototype.gridRowToY()
-
-  /**
-   * Convert the logical grid column number to a canvas x (pixel) coordinate.
-   *
-   * @return {undefined}
-   */
-  Enemy.prototype.gridColToX = function () {
-    this.position.x = ((this.col || 0) * this.cell.width) +
-      (this.colOffset || 0);
-  };// ./function Enemy.prototype.gridColToX()
-
-  /**
-   * Convert logical grid address to canvas (pixel) coordinates.
-   *
-   * @return {undefined}
-   */
-  Enemy.prototype.gridColRowToXY = function () {
-    this.gridRowToY();
-    this.gridColToX();
-  };// ./function Enemy.prototype.gridColRowToXY()
 
   /**
    * Update the sprite position based on the speed and elapsed time.
@@ -342,9 +393,8 @@
       ) {
     Enemy.call(this, imgRsrc, gridRow, ofstVert, undefined, cvsContext, gridCell);
     this.pendingCommand = null;
-    this.col = gridCol;
     this.colOffset = ofstHoriz;
-    this.gridColToX();
+    this.col = gridCol;
   }// ./function Avatar(imgRsrc, gridRow, gridCol, ofstVert, ofstHoriz,
   //      cvsContext, gridCell)
   Avatar.prototype = Object.create(Enemy.prototype);
@@ -398,7 +448,6 @@
     }//./switch (cmd)
     //TODO: add limit checks for edge of field: die
     // might be 'automatic', based on collision logic?
-    this.gridColRowToXY();
 
     //Make sure the command does not get processed again
     this.pendingCommand = null;
@@ -614,7 +663,7 @@
                   "seconds" : 60,
                   "startDistance" : 0,
                   "speed" : 80,
-                  "distances" : [6, 1]
+                  "distances" : [1, 6]
                 }
               ],
               [
@@ -841,7 +890,6 @@
     // Move the player avatar back to the starting location
     this.player.col = this.APP_CONFIG.player.start.col;
     this.player.row = this.APP_CONFIG.player.start.row;
-    this.player.gridColRowToXY();
   };// ./function Frogger.prototype.initLevel()
 
   /**
@@ -890,7 +938,6 @@
     // no longer, visible.
     this.limits.queuedSpriteX = this.enemySprites[0][0].position.x;
     this.enemySprites[0][0].col = this.GAME_BOARD.canvas.gridCols;
-    this.enemySprites[0][0].gridColToX();
     this.limits.recycleSpriteX = this.enemySprites[0][0].position.x;
 
     cfg = this.APP_CONFIG.player;
