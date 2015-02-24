@@ -458,6 +458,112 @@
   // Create Frogger (pseudoclassical) Class //
   ////////////////////////////////////////////
 
+  // Shared functions that do not really belong in the prototype.  Using
+  // function scope instead.
+
+  /**
+   * Display game state information as a HUD overlay
+   *
+   * This is (to be) run in the context of the 2D context for the canvas.
+   *
+   * Deliberately shared in function scope, not through the prototype chain:
+   * internal helper function.
+   *
+   * @param {Object} app    Reference to get state information from
+   * @return {undefined}
+   */
+  function paceCarHud(app) {
+    var hud, lblWidths, tm, tmStr;
+
+    /**
+     * Helper function to place a piece of constant text based on a descriptor
+     * block
+     *
+     * @param {Object} block Properties define what and where to place the text
+     * @param {Integer} yPos The vertical position to place the text
+     * @return {Integer}
+     */
+    function placeLabel(block, yPos) {
+      this.fillText(block.text, block.left, yPos, block.maxWidth);
+      // Get the space actually used when the label is drawn
+      return Math.min(this.measureText(block.text).width, block.maxWidth);
+    }// ./function placeLabel(block, yPos)
+
+    /**
+     * Helper function to place calculated text based on a descriptor block
+     *
+     * This calculates the space used by, and the location of preceding and
+     * following label text, then applies margin information to calculate where
+     * to place the text, and what width limit to apply.
+     *
+     * @param {string|Integer} val value to be drawn as text
+     * @param {Object} desc     Placement properties for val
+     * @param {Object} startX   Ending position for the preceding label
+     * @param {Object} endX     Starting position the following label
+     * @param {Integer} yPos    The vertical position to place the text
+     * @return {undefined}
+     */
+    function placeValue(val, desc, startX, endX, yPos) {
+      var leftX, rightX, maxWidth, placeX;
+      this.textAlign = desc.align;
+      leftX = startX + desc.margin.left;
+      rightX = endX - desc.margin.right;
+      maxWidth = rightX - leftX;
+      if (desc.align === 'right') {
+        placeX = rightX;
+      } else if (desc.align === 'center') {
+        placeX = leftX + (maxWidth / 2);
+      } else {// 'left', or any unrecognized alignment
+        placeX = leftX;
+      }
+      this.fillText(val, placeX, yPos, maxWidth);
+    }// ./function placeValue(val, desc, prev, next, yPos)
+
+    this.save();
+
+    hud = app.APP_CONFIG.hud;
+
+    // Clear the top 'transparent' information area
+    this.clearRect(0, 0, this.canvas.width, hud.headline.height);
+
+    // (level) Time Remaining
+    // TODO: move constants to APP_CONFIG
+    this.textBaseline = 'ideographic';
+    this.textAlign = 'left';
+    this.font = hud.labels.font;
+    this.fillStyle = hud.labels.style;
+
+    lblWidths = {};
+    lblWidths.time = placeLabel.call(this, hud.labels.time, hud.headline.baseY);
+    lblWidths.level = placeLabel.call(this, hud.labels.level, hud.headline.baseY);
+    lblWidths.score = placeLabel.call(this, hud.labels.score, hud.headline.baseY);
+
+    this.font = hud.values.font;
+    this.fillStyle = hud.values.style;
+
+    tm = app.APP_CONFIG.enemy.levels[app.level].length - app.elapsedTime;
+    tmStr = Number(tm).toFixed(1);
+    //zfStr = (tm < 99.5) ? ('00' + tmStr).slice(-4) : tmStr;//leading zeros
+    placeValue.call(this, tmStr, hud.values.time,
+      hud.labels.time.left + lblWidths.time,
+      hud.labels.level.left, hud.headline.baseY
+      );
+    placeValue.call(this, app.level, hud.values.level,
+      hud.labels.level.left + lblWidths.level,
+      hud.labels.score.left, hud.headline.baseY
+      );
+    placeValue.call(this, app.score, hud.values.score,
+      hud.labels.score.left + lblWidths.score,
+      this.canvas.width, hud.headline.baseY
+      );
+
+    // TODO:
+    // Lives left
+    // (scrolling) status line : events like (new) prize displayed (pts for)
+    this.restore();
+  }// ./paceCarHud(app)
+
+
   /**
    * Class to control the application and operations sequence
    *
@@ -523,7 +629,10 @@
      */
     PaceCar.prototype.render = function () {
       // Access outer function Frogger constructor 'this' context through 'that'
-      that.display();
+
+      // Most of the operations are based on / relative to the 2D canvas context,
+      // so make that the 'current' context to perform the display operations in.
+      paceCarHud.call(this.context, that);
     };// .function PaceCar.prototype.render()
 
     /////////////////////////////////////////////
@@ -707,10 +816,61 @@
         },
         "verticalOffset" : -30,
         "horizontalOffset" : 0
+      },
+      "hud" : {
+        "headline" : {
+          "baseY" : 40,
+          "height" : 50
+        },
+        "labels" : {
+          "font" : "18pt Tahoma, Geneva, sans-serif",
+          "style" : "yellow",
+          "time" : {
+            "text" : "Time:",
+            "left" : 10,
+            "maxWidth" : 65
+          },
+          "level" : {
+            "text" : "Level:",
+            "left" : 195,
+            "maxWidth" : 70
+          },
+          "score" : {
+            "text" : "Score:",
+            "left" : 330,
+            "maxWidth" : 75
+          }
+        },
+        "values" : {
+          "font" : "32pt Lucida Console, Monaco, monospace",
+          "style" : "black",
+          "time" : {
+            "align" : "right",
+            "margin" : {
+              "left" : 5,
+              "right" : 15
+            }
+          },
+          "level" : {
+            "align" : "left",
+            "margin" : {
+              "left" : 5,
+              "right" : 10
+            }
+          },
+          "score" : {
+            "align" : "left",
+            "margin" : {
+              "left" : 5,
+              "right" : 10
+            }
+          }
+        }
       }
     };// ./APP_CONFIG = {}
 
     this.level = 0;
+    this.score = 0;
     this.levelTime = 0;
     this.limits = {};
     this.tracker = new PaceCar();
@@ -1166,16 +1326,6 @@
     //     - probably needs cleanup pass, so do not end up with multiple sprites
     //       waiting to be recycled.
   };// ./function Frogger.prototype.next(deltaTime)
-
-  /**
-   * Display game state information (at the start of) each animation frame
-   *
-   * @return {undefined}
-   */
-  Frogger.prototype.display = function () {
-    // TODO: stub
-    return undefined;
-  };// ./function Frogger.prototype.display()
 
   /** TODO: move the config structure description to engine.js, keep only the
    *  specifics for the current application here
