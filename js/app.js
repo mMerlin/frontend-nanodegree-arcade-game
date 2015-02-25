@@ -210,7 +210,7 @@
   ////////////////////////////////////////////////
 
   // Shared functions that do not really belong in the prototype.  Using
-  // function scope instead.
+  // function closure scope instead.
 
   /**
    * Set the sprite speed, and adjust the orientation based on movement direction
@@ -458,8 +458,8 @@
   // Create Frogger (pseudoclassical) Class //
   ////////////////////////////////////////////
 
-  // Shared functions that do not really belong in the prototype.  Using
-  // function scope instead.
+  // Shared functions that do not really belong in the prototypes.  Using
+  // function closure scope instead.
 
   /**
    * Display game state information as a HUD overlay
@@ -472,8 +472,8 @@
    * @param {Object} app    Reference to get state information from
    * @return {undefined}
    */
-  function paceCarHud(app) {
-    var hud, lblWidths, tm, tmStr;
+  function hudRender(app) {
+    var ctx, hud, segWidths, tm, tmStr;
 
     /**
      * Helper function to place a piece of constant text based on a descriptor
@@ -484,9 +484,23 @@
      * @return {Integer}
      */
     function placeLabel(block, yPos) {
+      var calcWidth;
+      this.save();
+      // Apply (cascading) overrides
+      if (block.baseline) {
+        this.textBaseline = block.baseline;
+      }
+      if (block.font) {
+        this.font = block.font;
+      }
+      if (block.style) {
+        this.fillStyle = block.style;
+      }
       this.fillText(block.text, block.left, yPos, block.maxWidth);
       // Get the space actually used when the label is drawn
-      return Math.min(this.measureText(block.text).width, block.maxWidth);
+      calcWidth = Math.min(this.measureText(block.text).width, block.maxWidth);
+      this.restore();
+      return calcWidth;
     }// ./function placeLabel(block, yPos)
 
     /**
@@ -519,49 +533,90 @@
       this.fillText(val, placeX, yPos, maxWidth);
     }// ./function placeValue(val, desc, prev, next, yPos)
 
-    this.save();
+    ctx = this.context;
+    ctx.save();
 
     hud = app.APP_CONFIG.hud;
 
-    // Clear the top 'transparent' information area
-    this.clearRect(0, 0, this.canvas.width, hud.headline.height);
+    // Clear the top and bottom 'transparent' information areas
+    ctx.clearRect(0, 0, ctx.canvas.width, hud.headline.height);
+    ctx.clearRect(0, ctx.canvas.height - hud.statusline.height,
+      ctx.canvas.width, ctx.canvas.height);
 
-    // (level) Time Remaining
-    // TODO: move constants to APP_CONFIG
-    this.textBaseline = 'ideographic';
-    this.textAlign = 'left';
-    this.font = hud.labels.font;
-    this.fillStyle = hud.labels.style;
+    // Setup the base placement information
+    ctx.textBaseline = 'ideographic';
+    ctx.font = hud.headline.labelsfont;
+    ctx.fillStyle = hud.labels.style;
+    // For the current 'placeValue' positioning logic to work, the labels
+    // need to stay left aligned.  No alignment overrides done in placeLabel
+    ctx.textAlign = 'left';
 
-    lblWidths = {};
-    lblWidths.time = placeLabel.call(this, hud.labels.time, hud.headline.baseY);
-    lblWidths.level = placeLabel.call(this, hud.labels.level, hud.headline.baseY);
-    lblWidths.score = placeLabel.call(this, hud.labels.score, hud.headline.baseY);
+    segWidths = {};
+    // TODO: IDEA: change the time label colour (style) based on time remaining
+    // style = styleCalc(app.levelTime, app.elapsedTime);//green>>yellow>>red
+    segWidths.time = placeLabel.call(ctx, hud.labels.time, hud.headline.baseY);
+    segWidths.level = placeLabel.call(ctx, hud.labels.level, hud.headline.baseY);
+    segWidths.score = placeLabel.call(ctx, hud.labels.score, hud.headline.baseY);
 
-    this.font = hud.values.font;
-    this.fillStyle = hud.values.style;
+    if (!this.scrollMessage) {
+      // Only put 'static' information on the status line when not scrolling
+      ctx.font = hud.statusline.labelsfont;
+      segWidths.lives = placeLabel.call(ctx, hud.labels.lives,
+        ctx.canvas.height + hud.statusline.baseY
+        );
+    }
 
-    tm = app.APP_CONFIG.enemy.levels[app.level].length - app.elapsedTime;
+    ctx.font = hud.headline.valuesfont;
+    ctx.fillStyle = hud.values.style;
+
+    tm = app.levelTime - app.elapsedTime;
     tmStr = Number(tm).toFixed(1);
     //zfStr = (tm < 99.5) ? ('00' + tmStr).slice(-4) : tmStr;//leading zeros
-    placeValue.call(this, tmStr, hud.values.time,
-      hud.labels.time.left + lblWidths.time,
+    placeValue.call(ctx, tmStr, hud.values.time,
+      hud.labels.time.left + segWidths.time,
       hud.labels.level.left, hud.headline.baseY
       );
-    placeValue.call(this, app.level, hud.values.level,
-      hud.labels.level.left + lblWidths.level,
+    placeValue.call(ctx, app.level, hud.values.level,
+      hud.labels.level.left + segWidths.level,
       hud.labels.score.left, hud.headline.baseY
       );
-    placeValue.call(this, app.score, hud.values.score,
-      hud.labels.score.left + lblWidths.score,
-      this.canvas.width, hud.headline.baseY
+    placeValue.call(ctx, app.score, hud.values.score,
+      hud.labels.score.left + segWidths.score,
+      ctx.canvas.width, hud.headline.baseY
       );
 
-    // TODO:
-    // Lives left
-    // (scrolling) status line : events like (new) prize displayed (pts for)
-    this.restore();
-  }// ./paceCarHud(app)
+    if (this.scrollMessage) {
+      ctx.font = hud.statusline.messagesfont;
+      ctx.fillStyle = this.message.style;
+      ctx.textAlign = 'left';
+      ctx.fillText(this.message.text, this.position.x,
+        hud.statusline.baseY + ctx.canvas.height
+        );
+      segWidths.scroll = ctx.measureText(this.message.text).width;
+      this.scrollEnd = this.position.x + segWidths.scroll;
+      if (this.message.repeat) {
+        // NOTE: this is only handling right to left scrolling??
+        if (this.scrollEnd < 0) {
+          this.position.x = this.scrollEnd + this.message.gap;
+        }
+        while (this.scrollEnd + this.message.gap < ctx.canvas.width) {
+          ctx.fillText(this.message.text, this.scrollEnd + this.message.gap,
+            hud.statusline.baseY + ctx.canvas.height
+            );
+          this.scrollEnd += (this.message.gap + segWidths.scroll);
+        }
+      }
+    } else {
+      // No message is currently being scrolled, so show that 'static' data
+      ctx.font = hud.statusline.valuesfont;
+      placeValue.call(ctx, app.lives, hud.values.lives,
+        hud.labels.lives.left + segWidths.lives,
+        ctx.canvas.width, hud.statusline.baseY + ctx.canvas.height
+        );
+    }
+
+    ctx.restore();
+  }// ./hudRender(app)
 
 
   /**
@@ -581,11 +636,11 @@
     ///////////////////////////////////////////////////////////
 
     /* NOTE: With the current application structure, only a single instance of
-     * the Frogger class should ever need to be created.  That should avoid the
-     * memory leak associated with getting a new copy of all locally defined
-     * functions each time the Frogger function is called.  It should only
-     * happen once, so only a single copy of the PaceCar related functions
-     * should ever be created.
+     * the (singleton) Frogger class should ever need to be created.  That
+     * should avoid the memory leak associated with getting a new copy of all
+     * locally defined functions each time the Frogger function is called.  It
+     * should only happen once, so only a single copy of the PaceCar related
+     * functions should ever be created.
      */
 
     // TODO: Verify logic: inner class
@@ -602,8 +657,10 @@
      */
     function PaceCar(cvsContext) {
       // Access outer function Frogger constructor 'this' context through 'that'
-      Sprite.call(this, that.APP_CONFIG.enemy.spriteTile, undefined, undefined,
-        cvsContext);
+      Sprite.call(this, that.APP_CONFIG.enemy.spriteTile, 0,
+        undefined, cvsContext);
+      this.speed = 0;// Not using the setter from Enemy
+      this.scrollMessage = false;
     }// ./function PaceCar(cvsContext)
     PaceCar.prototype = Object.create(Enemy.prototype);
     PaceCar.prototype.constructor = PaceCar;
@@ -617,6 +674,18 @@
     PaceCar.prototype.update = function (deltaTime) {
       // Access outer function Frogger constructor 'this' context through 'that'
       that.next(deltaTime);
+      // Update the instance position as well, to handle scrolling HUD messages
+      if (this.scrollMessage) {
+        if (this.scrollEnd < 0) {
+          // Message has scrolled off of the canvas
+          this.scrollMessage = false;
+          this.position.x = this.context.canvas.width;
+          this.scrollEnd = this.position.x;
+        } else {
+          this.position.x += this.message.speed * deltaTime;
+        }
+        //TODO: add logic to change the message occasionally
+      }
     };// ./function PaceCar.prototype.update(deltaTime)
 
     /**
@@ -629,10 +698,7 @@
      */
     PaceCar.prototype.render = function () {
       // Access outer function Frogger constructor 'this' context through 'that'
-
-      // Most of the operations are based on / relative to the 2D canvas context,
-      // so make that the 'current' context to perform the display operations in.
-      paceCarHud.call(this.context, that);
+      hudRender.call(this, that);
     };// .function PaceCar.prototype.render()
 
     /////////////////////////////////////////////
@@ -812,7 +878,8 @@
         "spriteTile" : "images/char-boy.png",
         "start" : {
           "row" : 5,
-          "col" : 2
+          "col" : 2,
+          "lives" : 5
         },
         "verticalOffset" : -30,
         "horizontalOffset" : 0
@@ -820,12 +887,30 @@
       "hud" : {
         "headline" : {
           "baseY" : 40,
-          "height" : 50
+          "height" : 50,
+          "labelsfont" : "18pt Tahoma, Geneva, sans-serif",
+          "valuesfont" : "32pt Lucida Console, Monaco, monospace"
+        },
+        "statusline" : {
+          "baseY" : -3,
+          "height" : 20,
+          "labelsfont" : "12pt Tahoma, Geneva, sans-serif",
+          "valuesfont" : "14pt Lucida Console, Monaco, monospace",
+          "messagesfont" : "12pt Times New Roman, Times, serif",
+          "templates" : {
+            "start" : {
+              "text" : "Press SPACE key to start",
+              "speed" : -30,
+              "style" : "red",
+              "repeat" : true,
+              "gap" : 150
+            }
+          }
         },
         "labels" : {
-          "font" : "18pt Tahoma, Geneva, sans-serif",
           "style" : "yellow",
           "time" : {
+            "style" : "green",
             "text" : "Time:",
             "left" : 10,
             "maxWidth" : 65
@@ -839,6 +924,11 @@
             "text" : "Score:",
             "left" : 330,
             "maxWidth" : 75
+          },
+          "lives" : {
+            "text" : "Lives:",
+            "left" : 50,
+            "maxWidth" : 150
           }
         },
         "values" : {
@@ -864,6 +954,13 @@
               "left" : 5,
               "right" : 10
             }
+          },
+          "lives" : {
+            "align" : "left",
+            "margin" : {
+              "left" : 3,
+              "right" : 10
+            }
           }
         }
       }
@@ -871,6 +968,7 @@
 
     this.level = 0;
     this.score = 0;
+    this.lives = this.APP_CONFIG.player.start.lives;
     this.levelTime = 0;
     this.limits = {};
     this.tracker = new PaceCar();
@@ -1107,6 +1205,12 @@
 
     // Fill in the CanvasRenderingContext2D for the tracker.
     this.tracker.context = cvsContext;
+    // Fill in the (base) position for scrolling messages (bottom of canvas)
+    this.tracker.position.y = cvsContext.canvas.height;
+    this.tracker.message = this.APP_CONFIG.hud.statusline.templates.start;
+    this.tracker.scrollMessage = true;
+    this.tracker.position.x = cvsContext.canvas.width;
+    this.tracker.scrollEnd = this.tracker.position.x;
 
     // Setup the game state for the current (first = 0) level
     this.initLevel();
