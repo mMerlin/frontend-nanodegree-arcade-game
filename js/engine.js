@@ -63,6 +63,26 @@ document.addEventListener('DOMContentLoaded', function () {
     ]
   };
 
+  /**
+   * Create a custom event with fall back that works in IE9
+   *
+   * @ @param {string} evName  The name for the custome event
+   * @ @param {Object} evObj   The properties to include in the event details.
+   * @returns {CustomEvent}
+   */
+  function makeCustomEvent(evName, evObj) {
+    var cstEvnt;
+    //IE9 fails on the 'standard' new CustomEvent() with 'Ojbect doesn't
+    //support this action'.  Provide a fall back.
+    try {
+      cstEvnt = new CustomEvent(evName, { detail : evObj });
+    } catch (e) {
+      cstEvnt = document.createEvent("CustomEvent");
+      cstEvnt.initCustomEvent(evName, false, false, evObj);
+    }
+    return cstEvnt;
+  }// ./function makeCustomEvent(evName, evObj)
+
   /* start the game engin processing loop.  Another anonymous function is used
    * for this, but only as a convenience, to be able to pass an argument to it.
    * TODO: flatten this code: the parameter is not really needed.  Just set
@@ -93,11 +113,9 @@ document.addEventListener('DOMContentLoaded', function () {
     // TODO: If the configuration information is being passed through an object
     // created in the engine’s namespace, an event trigger will not be needed.
     // the configuratioin object can carry the callback function.
-    rdyEvnt = new CustomEvent("engineReady", {
-      "detail" : {
-        "message" : "Canvas exists",
-        "context" : ctx
-      }
+    rdyEvnt = makeCustomEvent("engineReady", {
+      "message" : "Canvas exists",
+      "context" : ctx
     });
     document.dispatchEvent(rdyEvnt);
 
