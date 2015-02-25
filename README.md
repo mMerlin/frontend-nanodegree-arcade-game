@@ -5,10 +5,17 @@ This demonstrates the use of:
 * pseudoclassical class pattern
   * with hidden private data and methods
 * (nested) pseudoclassical subclassing
+  * with get and set properties using function scope methods
 * over-riding superclass methods
 * using superclass methods in subclassed prototype methods
+* function closure scope private 'inner' functions
+* singleton pattern
 * function callbacks
+* communication though custom events
 * smooth animation on html5 canvas
+
+See the live application running at
+http://mmerlin.github.io/frontend-nanodegree-arcade-game/
 
 frontend-nanodegree-arcade-game
 ===============================
