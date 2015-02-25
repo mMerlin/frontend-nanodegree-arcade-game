@@ -64,7 +64,7 @@ document.addEventListener('DOMContentLoaded', function () {
   };
 
   /**
-   * Create a custom event with fall back that works in IE9
+   * Create a custom event with fall back that works in IE (11 at least)
    *
    * @ @param {string} evName  The name for the custome event
    * @ @param {Object} evObj   The properties to include in the event details.
@@ -72,8 +72,8 @@ document.addEventListener('DOMContentLoaded', function () {
    */
   function makeCustomEvent(evName, evObj) {
     var cstEvnt;
-    //IE9 fails on the 'standard' new CustomEvent() with 'Ojbect doesn't
-    //support this action'.  Provide a fall back.
+    // IE11 fails on the 'standard' new CustomEvent() with 'Ojbect doesn't
+    // support this action'.  Provide a fall back.
     try {
       cstEvnt = new CustomEvent(evName, { detail : evObj });
     } catch (e) {

@@ -63,15 +63,15 @@
   }// ./function namespace(namespaceString)
 
   /**
-   * Create a custom event with fall back that works in IE9
+   * Create a custom event with fall back that works in IE (11 at least)
    *
-   * @ @param {string} evName  The name for the custome event
+   * @ @param {string} evName  The name for the custom event
    * @ @param {Object} evObj   The properties to include in the event details.
    * @returns {CustomEvent}
    */
   function makeCustomEvent(evName, evObj) {
     var cstEvnt;
-    //IE9 fails on the 'standard' new CustomEvent() with 'Ojbect doesn't
+    //IE11 fails on the 'standard' new CustomEvent() with 'Object doesn't
     //support this action'.  Provide a fall back.
     try {
       cstEvnt = new CustomEvent(evName, { detail : evObj });
@@ -576,8 +576,8 @@
       ctx.canvas.width, ctx.canvas.height);
 
     // Setup the base placement information
-    // It appears that google chrome handles basline more like bottom, instead
-    // of alphabetic.  At least for (the restult of) "Lucida Console, Monaco,
+    // It appears that Google Chrome handles baseline more like bottom, instead
+    // of alphabetic.  At least for (the result of) "Lucida Console, Monaco,
     // monospace".  The displayed text was being raised a few pixels relative
     // to the labels, which were using "Tahoma, Geneva, sans-serif", or
     // "Times New Roman, Times, serif"
@@ -657,6 +657,14 @@
     ctx.restore();
   }// ./hudRender(app)
 
+  /**
+   * Get the 1 based level number to use when showing it to the user
+   *
+   * @return {undefined}
+   */
+  function getLevel() {
+    return this.lvlIndex + 1;
+  }
   // Store the single actual instance of the application class
   froggerInstance = false;
   // TODO: wrap the Frogger class constructor and the froggerInstance instance
@@ -1018,12 +1026,17 @@
     };// ./APP_CONFIG = {}
 
     this.state = 'waiting';
-    this.level = 0;
+    this.lvlIndex = 0;
     this.score = 0;
     this.lives = this.APP_CONFIG.player.start.lives;
     this.levelTime = 0;
     this.limits = {};
     this.tracker = new PaceCar();
+
+    // Create read-only 'level' calculated property
+    Object.defineProperty(this, "level", {
+      get : getLevel
+    });// get level() { return this.lvlIndex + 1; }
 
     // add a dummy enemy object to the start of the list.  Use to:
     // - check for collisions
@@ -1177,11 +1190,11 @@
   Frogger.prototype.initLevel = function () {
     var lvlConfig, row, sprite;
     console.log((new Date()).toISOString() + ' reached Frogger.initLevel');
-    // TODO: handle (better) if this.level >= max configured levels
-    if (this.level >= this.APP_CONFIG.enemy.levels.length) {
+    // TODO: handle (better) if this.lvlIndex >= max configured levels
+    if (this.lvlIndex >= this.APP_CONFIG.enemy.levels.length) {
       throw new Error('Game broken, no level ' + this.level + ' configuration');
     }
-    lvlConfig = this.APP_CONFIG.enemy.levels[this.level];
+    lvlConfig = this.APP_CONFIG.enemy.levels[this.lvlIndex];
 
     if (lvlConfig.length) {
       this.levelTime = lvlConfig.length;
@@ -1365,7 +1378,7 @@
   Frogger.prototype.cycleEnemyPatterns = function () {
     var lvlConfig, row, rowConfig, rowState, rowEnemies,
       ptrnConfig, nSprite, vSprite;
-    lvlConfig = this.APP_CONFIG.enemy.levels[this.level];
+    lvlConfig = this.APP_CONFIG.enemy.levels[this.lvlIndex];
 
     for (row = 0; row < this.currentPatterns.length; row += 1) {
       rowState = this.currentPatterns[row];
@@ -1478,6 +1491,8 @@
 
   /**
    * Game state processing to do (at the start of) each animation frame
+   *
+   * NOTE: conceptually done at 'pre-update'
    *
    * @param {Number} deltaTime    (Fractional) seconds since previous update
    * @return {undefined}
