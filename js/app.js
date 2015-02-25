@@ -1,5 +1,5 @@
 /*jslint browser: true, devel: true, todo: true, indent: 2, maxlen: 82 */
-/*global Resources */
+/*global Resources, CustomEvent */
 
 /* app.js
  * This file provides the functionality for the active game elements.  That is
@@ -61,6 +61,26 @@
 
     return parent;
   }// ./function namespace(namespaceString)
+
+  /**
+   * Create a custom event with fall back that works in IE9
+   *
+   * @ @param {string} evName  The name for the custome event
+   * @ @param {Object} evObj   The properties to include in the event details.
+   * @returns {CustomEvent}
+   */
+  function makeCustomEvent(evName, evObj) {
+    var cstEvnt;
+    //IE9 fails on the 'standard' new CustomEvent() with 'Ojbect doesn't
+    //support this action'.  Provide a fall back.
+    try {
+      cstEvnt = new CustomEvent(evName, { detail : evObj });
+    } catch (e) {
+      cstEvnt = document.createEvent("CustomEvent");
+      cstEvnt.initCustomEvent(evName, false, false, evObj);
+    }
+    return cstEvnt;
+  }// ./function makeCustomEvent(evName, evObj)
 
 
   ///////////////////////////////////////////
@@ -430,27 +450,39 @@
    * @return {undefined}
    */
   Avatar.prototype.update = function () {
+    var appEvent;
     // Process any pending (movement) command.  No, or unrecognized, command
     // does nothing
-    switch (this.pendingCommand) {
-    case 'left':
-      this.col -= 1;
-      break;
-    case 'right':
-      this.col += 1;
-      break;
-    case 'up':
-      this.row -= 1;
-      break;
-    case 'down':
-      this.row += 1;
-      break;
-    }//./switch (cmd)
+    if (this.pendingCommand) {
+      switch (this.pendingCommand) {
+      case 'left':
+        this.col -= 1;
+        break;
+      case 'right':
+        this.col += 1;
+        break;
+      case 'up':
+        this.row -= 1;
+        break;
+      case 'down':
+        this.row += 1;
+        break;
+      default:
+        // Just pass the command along to the main application.  *We* do not need
+        // to know anything about it.
+        appEvent = makeCustomEvent("ApplicationCommand", {
+          message : "Application Event received",
+          command : this.pendingCommand
+        });
+        document.dispatchEvent(appEvent);
+        break;
+      }// ./switch (this.pendingCommand)
+
+      //Make sure the command does not get processed again
+      this.pendingCommand = null;
+    }// ./if (this.pendingCommand)
     //TODO: add limit checks for edge of field: die
     // might be 'automatic', based on collision logic?
-
-    //Make sure the command does not get processed again
-    this.pendingCommand = null;
   };// ./function Avatar.prototype.update()
 
 
@@ -544,7 +576,14 @@
       ctx.canvas.width, ctx.canvas.height);
 
     // Setup the base placement information
-    ctx.textBaseline = 'ideographic';
+    // It appears that google chrome handles basline more like bottom, instead
+    // of alphabetic.  At least for (the restult of) "Lucida Console, Monaco,
+    // monospace".  The displayed text was being raised a few pixels relative
+    // to the labels, which were using "Tahoma, Geneva, sans-serif", or
+    // "Times New Roman, Times, serif"
+    // ctx.textBaseline = 'ideographic';
+    // ctx.textBaseline = 'bottom';
+    ctx.textBaseline = 'alphabetic';
     ctx.font = hud.headline.labelsfont;
     ctx.fillStyle = hud.labels.style;
     // For the current 'placeValue' positioning logic to work, the labels
@@ -839,7 +878,7 @@
       "enemy" : {
         "spriteTile" : "images/enemy-bug.png",
         "verticalOffset" : -20,
-        "maxSprites" : [3, 3, 3],
+        "maxSprites" : [3, 4, 4],
         "topRow" : 1,
         "levels" : [
           {
@@ -858,7 +897,7 @@
                   "seconds" : 60,
                   "startDistance" : 0,
                   "speed" : -40,
-                  "distances" : [3.2]
+                  "distances" : [2.8, 2.8, 2.8, 5.6]
                 }
               ],
               [
@@ -866,7 +905,7 @@
                   "seconds" : 60,
                   "startDistance" : 0,
                   "speed" : 40,
-                  "distances" : [3.2]
+                  "distances" : [2.8, 2.8, 2.8, 5.6]
                 }
               ]
             ]
@@ -978,6 +1017,7 @@
       }
     };// ./APP_CONFIG = {}
 
+    this.state = 'waiting';
     this.level = 0;
     this.score = 0;
     this.lives = this.APP_CONFIG.player.start.lives;
@@ -1109,6 +1149,25 @@
   };// ./function Frogger.prototype.recycleSprite(row)
 
   /**
+   * Handle a player requested command
+   *
+   * @param {Object} request   The request to be processed
+   * @return {undefined}
+   */
+  Frogger.prototype.handleCommand = function (request) {
+    console.log((new Date()).toISOString() + ' reached Frogger.handleCommand');
+    switch (request.command) {
+    case 'space':
+      // Ignore the request unless currently waiting
+      if (this.state === 'waiting') {
+        this.state = 'running';
+        this.tracker.scrollMessage = false;
+      }
+      break;
+    }
+  };// ./function Frogger.prototype.handleStart()
+
+  /**
    * Set the initial game state for the start of a level
    *
    * QUERY: Should this be a (function scope) helper function, instead of a
@@ -1219,6 +1278,7 @@
     this.tracker.context = cvsContext;
     // Fill in the (base) position for scrolling messages (bottom of canvas)
     this.tracker.position.y = cvsContext.canvas.height;
+    // Start the 'press space' message scrolling
     this.tracker.message = this.APP_CONFIG.hud.statusline.templates.start;
     this.tracker.scrollMessage = true;
     this.tracker.position.x = cvsContext.canvas.width;
@@ -1253,9 +1313,6 @@
     //   - prizes
     //     - prize function: score bonus; time bonus, slow enemy, reduce enemy
     //       and/or player 'hit' size
-    // - instead of [pre] defining all details about a level in the
-    //   configuration, only store level to level changes, and (intelligent)
-    //   merge objects.
 
     // Place all enemy objects in an array called allEnemies
     // Place the player object in a variable called player
@@ -1279,6 +1336,7 @@
     // Player.handleInput() method. You don't need to modify this.
     document.addEventListener('keyup', function (e) {
       var allowedKeys = {
+        32: 'space',
         37: 'left',
         38: 'up',
         39: 'right',
@@ -1287,6 +1345,15 @@
 
       // Access outer function Frogger constructor 'this' context through 'that'
       that.player.handleInput(allowedKeys[e.keyCode]);
+    });
+    document.addEventListener('ApplicationCommand', function (e) {
+      console.log((new Date()).toISOString() +
+        ' caught ApplicationCommand event'
+        );
+      console.log(e.detail);
+      // Access outer function Frogger constructor 'this' context through
+      // closure scope 'that'
+      that.handleCommand(e.detail);
     });
   };// ./function Frogger.prototype.start(cvsContext)
 
