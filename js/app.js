@@ -38,7 +38,7 @@
 // need to wait.
 (function () {
   'use strict';
-  var Sprite, app, engineNs;
+  var Sprite, froggerInstance, app, engineNs;
 
   /**
    * Create a nested set of objects, (only) if any level(s) do not already exist
@@ -618,6 +618,12 @@
     ctx.restore();
   }// ./hudRender(app)
 
+  // Store the single actual instance of the application class
+  froggerInstance = false;
+  // TODO: wrap the Frogger class constructor and the froggerInstance instance
+  // variable in another function that returns the (inner) Frogger function.
+  // Same structure as the Sprite function, using the private 'class scope'
+  // (function closure scope) data area to hold the instance reference.
 
   /**
    * Class to control the application and operations sequence
@@ -626,6 +632,12 @@
    */
   function Frogger() {
     var that;
+
+    // Reasonably robust singleton class pattern implementation
+    if (froggerInstance) {
+      return froggerInstance;
+    }
+    froggerInstance = this;
 
     // Create a function closure scope tag to allow the inner functions to get
     // back into the right context, when invoked with a different context.
