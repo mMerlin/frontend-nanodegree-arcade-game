@@ -38,7 +38,7 @@
 // need to wait.
 (function () {
   'use strict';
-  var Sprite, froggerInstance, app, engineNs;
+  var Sprite, STATE_ENUM, froggerInstance, app, engineNs;
 
   /**
    * Create a nested set of objects, (only) if any level(s) do not already exist
@@ -235,7 +235,7 @@
   /**
    * Set the sprite speed, and adjust the orientation based on movement direction
    *
-   * This is the set function for the speed property of Enemy class instances
+   * Enemy class speed property setter function
    *
    * @param {Number} newSpeed     Pixels per Second
    * @return {Number}
@@ -254,12 +254,12 @@
   }// ./function setSpeed(newSpeed)
 
   /**
-   * Get the sprite speed.
+   * Enemy class speed property getter function
    *
    * This will always be non-negative.  Reverse direction speeds are indicated
    * by this.flipped being true.
-   *
-   * This is the get function for the speed property of Enemy class instances
+   * TODO: verify? changing the transform ?plus? set placement coordinate to 0
+   * might work, and would simplify collision detection with flipped sprites
    *
    * @return {Number}
    */
@@ -269,6 +269,8 @@
 
   /**
    * Convert the logical grid column number to a canvas x (pixel) coordinate.
+   *
+   * Enemy class column property setter function
    *
    * @param {Integer} colNumber   The grid column for the sprite
    * @return {Integer}
@@ -280,12 +282,10 @@
   }// ./function setColumn(colNum)
 
   /**
-   * Get the defined sprite column number.
+   * Enemy class column property getter function
    *
    * This may not be accurate.  It is the value that was previously set, but
    * sprite movement could have altered the position away from the column.
-   *
-   * This is the get function for the col property of Enemy class instances
    *
    * @return {Number}
    */
@@ -295,6 +295,8 @@
 
   /**
    * Convert the logical grid row number to a canvas y (pixel) coordinate.
+   *
+   * Enemy class row property setter function
    *
    * @param {Integer} rowNumber   The grid row for the sprite
    * @return {Integer}
@@ -306,12 +308,10 @@
   }// ./function setRow(rowNum)
 
   /**
-   * Get the defined sprite row number.
+   * Enemy class row property getter function
    *
    * This may not be accurate.  It is the value that was previously set, but
    * sprite movement could have altered the position away from the row.
-   *
-   * This is the get function for the row property of Enemy class instances
    *
    * @return {Number}
    */
@@ -415,6 +415,7 @@
     this.pendingCommand = null;
     this.colOffset = ofstHoriz;
     this.col = gridCol;
+    this.sleeping = true;// Avatar does not respond to commands while sleeping
   }// ./function Avatar(imgRsrc, gridRow, gridCol, ofstVert, ofstHoriz,
   //      cvsContext, gridCell)
   Avatar.prototype = Object.create(Enemy.prototype);
@@ -432,6 +433,9 @@
     // Commands are NOT queued.  If multiple commands arrive in the same frame,
     // only the last one will get processed.
     this.pendingCommand = cmd;
+    console.log((new Date()).toISOString() +
+      ' reached handleInput: cmd = "' + cmd + '".'
+      );
     // DEBUG loop
     // console.log('bugs');
     // for (i = 0; i < engineNs.allEnemies.length; i += 1) {
@@ -451,25 +455,41 @@
    */
   Avatar.prototype.update = function () {
     var appEvent;
-    // Process any pending (movement) command.  No, or unrecognized, command
-    // does nothing
+    // Process any pending (movement) command, passing anything else to the
+    // application.
     if (this.pendingCommand) {
+      console.log((new Date()).toISOString() +
+        ' reached update; pending command: cmd = "' + this.pendingCommand +
+        '".'
+        );
       switch (this.pendingCommand) {
       case 'left':
-        this.col -= 1;
+        if (!this.sleeping) {
+          this.col -= 1;
+        }
         break;
       case 'right':
-        this.col += 1;
+        if (!this.sleeping) {
+          this.col += 1;
+        }
         break;
       case 'up':
-        this.row -= 1;
+        if (!this.sleeping) {
+          this.row -= 1;
+        }
         break;
       case 'down':
-        this.row += 1;
+        if (!this.sleeping) {
+          this.row += 1;
+        }
         break;
       default:
         // Just pass the command along to the main application.  *We* do not need
         // to know anything about it.
+        console.log((new Date()).toISOString() +
+          ' update passing pending command: cmd = "' + this.pendingCommand +
+          '" to application'
+          );
         appEvent = makeCustomEvent("ApplicationCommand", {
           message : "Application Event received",
           command : this.pendingCommand
@@ -478,28 +498,65 @@
         break;
       }// ./switch (this.pendingCommand)
 
-      //Make sure the command does not get processed again
+      if (!this.sleeping) {// debug
+        console.log((new Date()).toISOString() +
+          ' pending command: cmd = "' + this.pendingCommand +
+          '" processed in update'
+          );
+      }
+      // Always clear any pending command.  Commands not queued while they are
+      // not being processed.
       this.pendingCommand = null;
     }// ./if (this.pendingCommand)
     //TODO: add limit checks for edge of field: die
     // might be 'automatic', based on collision logic?
   };// ./function Avatar.prototype.update()
 
+  /**
+   * Setup any 'death throes' for the Avatar
+   *
+   * @return {undefined}
+   */
+  Avatar.prototype.die = function (cause) {
+    // TODO: stub
+    // Save any internal state before changing to show the death throes
+    // change icon? animate? spin and shrink?
+    // ?? just hide the avatar, and use another sprite for that ??
+    this.livingSprite = this.sprite;
+    console.log('Avatar died ' + cause);
+  };// ./function Avatar.prototype.die(cause)
+
+  /**
+   * Restore to 'normal' conditions after death throes finished
+   *
+   * @return {undefined}
+   */
+  Avatar.prototype.resurrect = function () {
+    // TODO: stub
+    // restore any (internal) changes made to show the death throes
+    this.sprite = this.livingSprite;
+    console.log('Avatar resurrected');
+  };// ./function Avatar.prototype.resurrect()
+
 
   ////////////////////////////////////////////
   // Create Frogger (pseudoclassical) Class //
   ////////////////////////////////////////////
 
-  // Shared functions that do not really belong in the prototypes.  Using
-  // function closure scope instead.
+  // Internal shared, helper, utility, modularizing functions and data that do
+  // not really belong in the prototypes.  Using function closure scope instead.
+
+  // Internal constants
+  STATE_ENUM = {
+    "waiting" : "waiting",
+    "dieing" : "Avatar dieing",
+    "resurrect" : "resurrect",
+    "newlevel" : "new level",
+    "running" : "running"
+  };
 
   /**
    * Display game state information as a HUD overlay
-   *
-   * This is (to be) run in the context of the 2D context for the canvas.
-   *
-   * Deliberately shared in function scope, not through the prototype chain:
-   * internal helper function.
    *
    * @param {Object} app    Reference to get state information from
    * @return {undefined}
@@ -592,7 +649,8 @@
 
     segWidths = {};
     // TODO: IDEA: change the time label colour (style) based on time remaining
-    // style = styleCalc(app.levelTime, app.elapsedTime);//green>>yellow>>red
+    // style = styleCalc(app.levelTime, app.elapsedTimes.level);
+    // green>>yellow>>red
     segWidths.time = placeLabel.call(ctx, hud.labels.time, hud.headline.baseY);
     segWidths.level = placeLabel.call(ctx, hud.labels.level, hud.headline.baseY);
     segWidths.score = placeLabel.call(ctx, hud.labels.score, hud.headline.baseY);
@@ -608,7 +666,7 @@
     ctx.font = hud.headline.valuesfont;
     ctx.fillStyle = hud.values.style;
 
-    tm = app.levelTime - app.elapsedTime;
+    tm = app.levelTime - app.elapsedTimes.level;
     tmStr = Number(tm).toFixed(1);
     //zfStr = (tm < 99.5) ? ('00' + tmStr).slice(-4) : tmStr;//leading zeros
     placeValue.call(ctx, tmStr, hud.values.time,
@@ -655,22 +713,142 @@
     }
 
     ctx.restore();
-  }// ./hudRender(app)
+  }// ./function hudRender(app)
 
   /**
    * Get the 1 based level number to use when showing it to the user
    *
-   * @return {undefined}
+   * @return {Integer}
    */
   function getLevel() {
     return this.lvlIndex + 1;
+  }// ./function getLevel()
+
+  /**
+   * Frogger class state property getter function
+   *
+   * Return the state from the (conceptually) private property
+   *
+   * @return {string}
+   */
+  function getState() {
+    return this.privateState;
+  }// ./function getState()
+
+  /**
+   * Change the application state, and update dependant properties. to match
+   *
+   * Frogger class state property setter function
+   *
+   * @param {string} newState   The destination state from STATE_ENUM
+   * @return {string}
+   */
+  function setState(newState) {
+    var prevState;
+    console.log((new Date()).toISOString() + ' changing state: "' +
+      this.privateState + '" ==> "' + newState + '"'
+      );
+    prevState = this.privateState;// if any logic needs to know the state path
+    this.privateState = newState;//TODO: add validation before setting?
+    this.elapsedTimes.state = 0;
+    switch (newState) {
+    case STATE_ENUM.waiting:
+      this.elapsedTimes.level = 0.0001;// Enough to trigger initial pattern change
+      break;
+    case STATE_ENUM.running:
+      this.tracker.scrollMessage = false;
+      this.player.sleeping = false;
+      break;
+    case STATE_ENUM.newlevel:
+      // Set timeout value (for the state), then switch to running?
+      // if previous state was running??
+      this.state = STATE_ENUM.waiting;
+      break;
+    case STATE_ENUM.dieing:
+      this.player.die(this.reason);
+      this.elapsedTimes.level = 0;
+      //this.finiteState.next = STATE_ENUM.resurrect;
+      //this.finiteState.delay = 5;//seconds for death throes
+      // = this.APP_CONFIG. ? .displayDeath;
+      break;
+    case STATE_ENUM.resurrect:
+      this.player.resurrect();
+      this.lives -= 1;
+      // TODO: alternate path when this.lives < 0
+      // - space to start message ? game over? start game over in above
+      this.state = STATE_ENUM.waiting;
+      break;
+    // case STATE_ENUM.otherRecognized:
+    //   states that do not need any extra processing
+    //   .paused ?
+    //   break;
+    default:
+      throw new Error('Unknown target state: ' + newState +
+        '; from state = "' + prevState + '"'
+        );
+      // break;
+    }
+    if (prevState === STATE_ENUM.running) {
+      this.player.sleeping = true;
+    }
+    console.log((new Date()).toISOString() + ' changed state: "' +
+      prevState + '" ==> "' + this.privateState + '"'
+      );
+    return this.privateState;
+  }// ./function setState(newState)
+
+  /**
+   * Advance internal application time values based on the current state
+   *
+   * @param {Number} deltaTime    Seconds elapsed since previous frame processed
+   * @return {undefined}
+   */
+  function manageTime(deltaTime) {
+    // Always up the time for the current state.  It is not actually used for
+    // most states, but will never conflict.  Anywhere it WOULD conflict gets
+    // its own separate property in this.elapsedTimes
+    this.elapsedTimes.state += deltaTime;
+    if (this.state === STATE_ENUM.running) {
+      // Only increase the elapsed level time when the application is running
+      this.elapsedTimes.level += deltaTime;
+    }
   }
+
   // Store the single actual instance of the application class
   froggerInstance = false;
   // TODO: wrap the Frogger class constructor and the froggerInstance instance
   // variable in another function that returns the (inner) Frogger function.
   // Same structure as the Sprite function, using the private 'class scope'
   // (function closure scope) data area to hold the instance reference.
+
+  // more closure scope properties for the PaceCar (inner) Class
+
+  /**
+   * PaceCar class message property getter function
+   *
+   * @return {string}
+   */
+  function getMessage() {
+    return this.privateMessage;
+  }// ./function getMessage()
+
+  /**
+   * Set the message text to be display in the HUD status line
+   *
+   * PaceCar class message property setter function
+   *
+   * @param {string} message    The message content
+   * @return {string}
+   */
+  function setMessage(message) {
+    this.privateMessage = message;
+    // Setup to start displaying the new message
+    this.scrollMessage = true;
+    this.position.x = this.context.canvas.width;
+    this.scrollEnd = this.position.x;
+
+    return this.privateMessage;
+  }
 
   /**
    * Class to control the application and operations sequence
@@ -720,6 +898,12 @@
         undefined, cvsContext);
       this.speed = 0;// Not using the setter from Enemy
       this.scrollMessage = false;
+      // Automatically update dependant properties on state changes
+      Object.defineProperty(this, "message", {
+        get : getMessage,
+        set : setMessage
+      });
+
     }// ./function PaceCar(cvsContext)
     PaceCar.prototype = Object.create(Enemy.prototype);
     PaceCar.prototype.constructor = PaceCar;
@@ -890,7 +1074,7 @@
         "topRow" : 1,
         "levels" : [
           {
-            "length" : 60,
+            "length" : 10,
             "rows" : [
               [
                 {
@@ -1025,18 +1209,25 @@
       }
     };// ./APP_CONFIG = {}
 
-    this.state = 'waiting';
+    // Create read-only 'level' calculated property
+    Object.defineProperty(this, "level", {
+      get : getLevel
+    });// get level() { return this.lvlIndex + 1; }
+
+    // Automatically update dependant properties on state changes
+    Object.defineProperty(this, "state", {
+      set : setState,
+      get : getState
+    });
+
     this.lvlIndex = 0;
     this.score = 0;
     this.lives = this.APP_CONFIG.player.start.lives;
     this.levelTime = 0;
     this.limits = {};
+    this.elapsedTimes = {};
     this.tracker = new PaceCar();
-
-    // Create read-only 'level' calculated property
-    Object.defineProperty(this, "level", {
-      get : getLevel
-    });// get level() { return this.lvlIndex + 1; }
+    this.state = STATE_ENUM.waiting;
 
     // add a dummy enemy object to the start of the list.  Use to:
     // - check for collisions
@@ -1056,8 +1247,6 @@
     // has things setup
     document.addEventListener('engineReady', function (e) {
       console.log((new Date()).toISOString() + ' caught engineReady event');
-      console.log(e.detail.message);
-      console.log(e.detail.context);
       // Access outer function Frogger constructor 'this' context through
       // closure scope 'that'
       that.start(e.detail.context);
@@ -1172,9 +1361,9 @@
     switch (request.command) {
     case 'space':
       // Ignore the request unless currently waiting
-      if (this.state === 'waiting') {
-        this.state = 'running';
-        this.tracker.scrollMessage = false;
+      // TODO: other cases to not ignore? abort 'dieing' animation?
+      if (this.state === STATE_ENUM.waiting) {
+        this.state = STATE_ENUM.running;
       }
       break;
     }
@@ -1205,7 +1394,7 @@
       }
     }
 
-    this.elapsedTime = 0;
+    this.state = STATE_ENUM.newlevel;
     // Build the initial level pattern configuration for each enemy row.  See
     // this.APP_CONFIG.enemy.reset for entry property descriptions.
     delete this.currentPatterns;
@@ -1237,6 +1426,8 @@
   /**
    * Create and initialize all game entities, and finish the initial
    * configuration
+   *
+   * Executed when 'engineReady' event received
    *
    * @param {Object} cvsContext    CanvasRenderingContext2D to display the
    *                    sprites on.
@@ -1293,9 +1484,6 @@
     this.tracker.position.y = cvsContext.canvas.height;
     // Start the 'press space' message scrolling
     this.tracker.message = this.APP_CONFIG.hud.statusline.templates.start;
-    this.tracker.scrollMessage = true;
-    this.tracker.position.x = cvsContext.canvas.width;
-    this.tracker.scrollEnd = this.tracker.position.x;
 
     // Setup the game state for the current (first = 0) level
     this.initLevel();
@@ -1355,6 +1543,9 @@
         39: 'right',
         40: 'down'
       };
+      console.log((new Date()).toISOString() +
+        ' caught keyup event: keycode = ' + e.keyCode
+        );
 
       // Access outer function Frogger constructor 'this' context through 'that'
       that.player.handleInput(allowedKeys[e.keyCode]);
@@ -1373,6 +1564,9 @@
   /**
    * Change to next movement pattern when an active pattern expires
    *
+   * Patterns typically change at the start of each level, but they CAN also
+   * change mid-level.
+   *
    * @return {undefined}
    */
   Frogger.prototype.cycleEnemyPatterns = function () {
@@ -1383,7 +1577,9 @@
     for (row = 0; row < this.currentPatterns.length; row += 1) {
       rowState = this.currentPatterns[row];
       rowEnemies = this.enemySprites[row];
-      if (this.elapsedTime >= rowState.expires) {
+      // hpd idea: include/use rowState.expired boolean, set by .next? (when
+      // app.state changes to 'waiting', AND currently patternIdx = -1 ?)
+      if (this.elapsedTimes.level >= rowState.expires) {
         rowConfig = lvlConfig.rows[row];
         console.log('End pattern @' + rowState.expires + ' for level ' +
           this.level + ', row ' + row
@@ -1420,7 +1616,7 @@
           rowState.seconds = ptrnConfig.seconds;
         }
         // NOTE: Design decision: Do not adjust for the actual elapsed time.
-        // rowState.expires = this.elapsedTime + rowState.seconds
+        // rowState.expires = this.elapsedTimes.level + rowState.seconds;
         // Set the time when the new pattern ends, and the following one starts
         rowState.expires += rowState.seconds;
 
@@ -1462,7 +1658,7 @@
         //  - make sure to keep enough info around for case where the distance
         //    can leave the whole row blank for awhile.
         //  - differences if speed changes
-      }// ./if (this.elapsedTime >= rowState.expires)
+      }// ./if (this.elapsedTimes.level >= rowState.expires)
     }// ./for (row = 0; row < this.currentPatterns.length; row += 1)
   };// ./function Frogger.prototype.cycleEnemyPatterns()
 
@@ -1498,15 +1694,14 @@
    * @return {undefined}
    */
   Frogger.prototype.next = function (deltaTime) {
-    this.elapsedTime += deltaTime;
+    manageTime.call(this, deltaTime);
 
     // Check for level time limit exceeded first
-    if (this.elapsedTime > this.levelTime) {
+    if (this.elapsedTimes.level > this.levelTime) {
       // Time has expired for the current level.  Avatar dies (from exposure)
-      // TODO: stub
-      console.log('Dieing from exposure @' + this.elapsedTime + ' on level ' +
-        this.level + ', with limit of ' + this.levelTime);
-      this.elapsedTime = 0;
+      this.reason = 'from exposure @' + this.elapsedTimes.level + ' on level ' +
+          this.level + ', with limit of ' + this.levelTime;
+      this.state = STATE_ENUM.dieing;
     }
 
     // TODO: check for collisions next ???
@@ -1609,7 +1804,7 @@
   //  is needed outside of the local function.  No external references to
   //  app.game needed??
   app = namespace('io.github.mmerlin.frogger');
-  //engineNs = namespace('io.gihub.mmerlin.animationEngine');
+  //engineNs = namespace('io.github.mmerlin.animationEngine');
   engineNs = window;
 
   //timeScaling : 1000.0,//milliseconds per second
