@@ -556,166 +556,6 @@
   };
 
   /**
-   * Display game state information as a HUD overlay
-   *
-   * @param {Object} app    Reference to get state information from
-   * @return {undefined}
-   */
-  function hudRender(app) {
-    var ctx, hud, segWidths, tm, tmStr;
-
-    /**
-     * Helper function to place a piece of constant text based on a descriptor
-     * block
-     *
-     * @param {Object} block Properties define what and where to place the text
-     * @param {Integer} yPos The vertical position to place the text
-     * @return {Integer}
-     */
-    function placeLabel(block, yPos) {
-      var calcWidth;
-      this.save();
-      // Apply (cascading) overrides
-      if (block.baseline) {
-        this.textBaseline = block.baseline;
-      }
-      if (block.font) {
-        this.font = block.font;
-      }
-      if (block.style) {
-        this.fillStyle = block.style;
-      }
-      this.fillText(block.text, block.left, yPos, block.maxWidth);
-      // Get the space actually used when the label is drawn
-      calcWidth = Math.min(this.measureText(block.text).width, block.maxWidth);
-      this.restore();
-      return calcWidth;
-    }// ./function placeLabel(block, yPos)
-
-    /**
-     * Helper function to place calculated text based on a descriptor block
-     *
-     * This calculates the space used by, and the location of preceding and
-     * following label text, then applies margin information to calculate where
-     * to place the text, and what width limit to apply.
-     *
-     * @param {string|Integer} val value to be drawn as text
-     * @param {Object} desc     Placement properties for val
-     * @param {Object} startX   Ending position for the preceding label
-     * @param {Object} endX     Starting position the following label
-     * @param {Integer} yPos    The vertical position to place the text
-     * @return {undefined}
-     */
-    function placeValue(val, desc, startX, endX, yPos) {
-      var leftX, rightX, maxWidth, placeX;
-      this.textAlign = desc.align;
-      leftX = startX + desc.margin.left;
-      rightX = endX - desc.margin.right;
-      maxWidth = rightX - leftX;
-      if (desc.align === 'right') {
-        placeX = rightX;
-      } else if (desc.align === 'center') {
-        placeX = leftX + (maxWidth / 2);
-      } else {// 'left', or any unrecognized alignment
-        placeX = leftX;
-      }
-      this.fillText(val, placeX, yPos, maxWidth);
-    }// ./function placeValue(val, desc, prev, next, yPos)
-
-    ctx = this.context;
-    ctx.save();
-
-    hud = app.APP_CONFIG.hud;
-
-    // Clear the top and bottom 'transparent' information areas
-    ctx.clearRect(0, 0, ctx.canvas.width, hud.headline.height);
-    ctx.clearRect(0, ctx.canvas.height - hud.statusline.height,
-      ctx.canvas.width, ctx.canvas.height);
-
-    // Setup the base placement information
-    // It appears that Google Chrome handles baseline more like bottom, instead
-    // of alphabetic.  At least for (the result of) "Lucida Console, Monaco,
-    // monospace".  The displayed text was being raised a few pixels relative
-    // to the labels, which were using "Tahoma, Geneva, sans-serif", or
-    // "Times New Roman, Times, serif"
-    // ctx.textBaseline = 'ideographic';
-    // ctx.textBaseline = 'bottom';
-    ctx.textBaseline = 'alphabetic';
-    ctx.font = hud.headline.labelsfont;
-    ctx.fillStyle = hud.labels.style;
-    // For the current 'placeValue' positioning logic to work, the labels
-    // need to stay left aligned.  No alignment overrides done in placeLabel
-    ctx.textAlign = 'left';
-
-    segWidths = {};
-    // TODO: IDEA: change the time label colour (style) based on time remaining
-    // style = styleCalc(app.levelTime, app.elapsedTimes.level);
-    // green>>yellow>>red
-    segWidths.time = placeLabel.call(ctx, hud.labels.time, hud.headline.baseY);
-    segWidths.level = placeLabel.call(ctx, hud.labels.level, hud.headline.baseY);
-    segWidths.score = placeLabel.call(ctx, hud.labels.score, hud.headline.baseY);
-
-    if (!this.scrollMessage) {
-      // Only put 'static' information on the status line when not scrolling
-      ctx.font = hud.statusline.labelsfont;
-      segWidths.lives = placeLabel.call(ctx, hud.labels.lives,
-        ctx.canvas.height + hud.statusline.baseY
-        );
-    }
-
-    ctx.font = hud.headline.valuesfont;
-    ctx.fillStyle = hud.values.style;
-
-    tm = app.levelTime - app.elapsedTimes.level;
-    tmStr = Number(tm).toFixed(1);
-    //zfStr = (tm < 99.5) ? ('00' + tmStr).slice(-4) : tmStr;//leading zeros
-    placeValue.call(ctx, tmStr, hud.values.time,
-      hud.labels.time.left + segWidths.time,
-      hud.labels.level.left, hud.headline.baseY
-      );
-    placeValue.call(ctx, app.level, hud.values.level,
-      hud.labels.level.left + segWidths.level,
-      hud.labels.score.left, hud.headline.baseY
-      );
-    placeValue.call(ctx, app.score, hud.values.score,
-      hud.labels.score.left + segWidths.score,
-      ctx.canvas.width, hud.headline.baseY
-      );
-
-    if (this.scrollMessage) {
-      ctx.font = hud.statusline.messagesfont;
-      ctx.fillStyle = this.message.style;
-      ctx.textAlign = 'left';
-      ctx.fillText(this.message.text, this.position.x,
-        hud.statusline.baseY + ctx.canvas.height
-        );
-      segWidths.scroll = ctx.measureText(this.message.text).width;
-      this.scrollEnd = this.position.x + segWidths.scroll;
-      if (this.message.repeat) {
-        // NOTE: this is only handling right to left scrolling??
-        if (this.scrollEnd < 0) {
-          this.position.x = this.scrollEnd + this.message.gap;
-        }
-        while (this.scrollEnd + this.message.gap < ctx.canvas.width) {
-          ctx.fillText(this.message.text, this.scrollEnd + this.message.gap,
-            hud.statusline.baseY + ctx.canvas.height
-            );
-          this.scrollEnd += (this.message.gap + segWidths.scroll);
-        }
-      }
-    } else {
-      // No message is currently being scrolled, so show that 'static' data
-      ctx.font = hud.statusline.valuesfont;
-      placeValue.call(ctx, app.lives, hud.values.lives,
-        hud.labels.lives.left + segWidths.lives,
-        ctx.canvas.width, hud.statusline.baseY + ctx.canvas.height
-        );
-    }
-
-    ctx.restore();
-  }// ./function hudRender(app)
-
-  /**
    * Get the 1 based level number to use when showing it to the user
    *
    * @return {Integer}
@@ -932,7 +772,7 @@
     };// ./function PaceCar.prototype.update(deltaTime)
 
     /**
-     * Handle display of non-sprite information.
+     * Handle display of non-sprite information as a HUD overlay.
      *
      * This overrides the superclass render function.  This sub-classed sprite
      * does not need to display 'itself'
@@ -940,8 +780,163 @@
      * @return {undefined}
      */
     PaceCar.prototype.render = function () {
+      var ctx, hud, segWidths, tm, tmStr;
       // Access outer function Frogger constructor 'this' context through 'that'
-      hudRender.call(this, that);
+
+      /**
+       * Helper function to place a piece of constant text based on a descriptor
+       * block
+       *
+       * @param {Object} block Properties define what and where to place the text
+       * @param {Integer} yPos The vertical position to place the text
+       * @return {Integer}
+       */
+      function placeLabel(block, yPos) {
+        var calcWidth;
+        this.save();
+        // Apply (cascading) overrides
+        if (block.baseline) {
+          this.textBaseline = block.baseline;
+        }
+        if (block.font) {
+          this.font = block.font;
+        }
+        if (block.style) {
+          this.fillStyle = block.style;
+        }
+        this.fillText(block.text, block.left, yPos, block.maxWidth);
+        // Get the space actually used when the label is drawn
+        calcWidth = Math.min(this.measureText(block.text).width, block.maxWidth);
+        this.restore();
+        return calcWidth;
+      }// ./function placeLabel(block, yPos)
+
+      /**
+       * Helper function to place calculated text based on a descriptor block
+       *
+       * This calculates the space used by, and the location of preceding and
+       * following label text, then applies margin information to calculate where
+       * to place the text, and what width limit to apply.
+       *
+       * @param {string|Integer} val value to be drawn as text
+       * @param {Object} desc     Placement properties for val
+       * @param {Object} startX   Ending position for the preceding label
+       * @param {Object} endX     Starting position the following label
+       * @param {Integer} yPos    The vertical position to place the text
+       * @return {undefined}
+       */
+      function placeValue(val, desc, startX, endX, yPos) {
+        var leftX, rightX, maxWidth, placeX;
+        this.textAlign = desc.align;
+        leftX = startX + desc.margin.left;
+        rightX = endX - desc.margin.right;
+        maxWidth = rightX - leftX;
+        if (desc.align === 'right') {
+          placeX = rightX;
+        } else if (desc.align === 'center') {
+          placeX = leftX + (maxWidth / 2);
+        } else {// 'left', or any unrecognized alignment
+          placeX = leftX;
+        }
+        this.fillText(val, placeX, yPos, maxWidth);
+      }// ./function placeValue(val, desc, prev, next, yPos)
+
+      ctx = this.context;
+      ctx.save();
+
+      hud = that.APP_CONFIG.hud;
+
+      // Clear the top and bottom 'transparent' information areas
+      ctx.clearRect(0, 0, ctx.canvas.width, hud.headline.height);
+      ctx.clearRect(0, ctx.canvas.height - hud.statusline.height,
+        ctx.canvas.width, ctx.canvas.height);
+
+      // Setup the base placement information
+      // It appears that Google Chrome handles baseline more like bottom, instead
+      // of alphabetic.  At least for (the result of) "Lucida Console, Monaco,
+      // monospace".  The displayed text was being raised a few pixels relative
+      // to the labels, which were using "Tahoma, Geneva, sans-serif", or
+      // "Times New Roman, Times, serif"
+      // ctx.textBaseline = 'ideographic';
+      // ctx.textBaseline = 'bottom';
+      ctx.textBaseline = 'alphabetic';
+      ctx.font = hud.headline.labelsfont;
+      ctx.fillStyle = hud.labels.style;
+      // For the current 'placeValue' positioning logic to work, the labels
+      // need to stay left aligned.  No alignment overrides done in placeLabel
+      ctx.textAlign = 'left';
+
+      segWidths = {};
+      // TODO: IDEA: change the time label colour (style) based on time remaining
+      // style = styleCalc(that.levelTime, that.elapsedTimes.level);
+      // green>>yellow>>red
+      segWidths.time = placeLabel.call(ctx, hud.labels.time, hud.headline.baseY);
+      segWidths.level = placeLabel.call(ctx, hud.labels.level,
+        hud.headline.baseY
+        );
+      segWidths.score = placeLabel.call(ctx, hud.labels.score,
+        hud.headline.baseY
+        );
+
+      if (!this.scrollMessage) {
+        // Only put 'static' information on the status line when not scrolling
+        ctx.font = hud.statusline.labelsfont;
+        segWidths.lives = placeLabel.call(ctx, hud.labels.lives,
+          ctx.canvas.height + hud.statusline.baseY
+          );
+      }
+
+      ctx.font = hud.headline.valuesfont;
+      ctx.fillStyle = hud.values.style;
+
+      tm = that.levelTime - that.elapsedTimes.level;
+      tmStr = Number(tm).toFixed(1);
+      //zfStr = (tm < 99.5) ? ('00' + tmStr).slice(-4) : tmStr;//leading zeros
+      placeValue.call(ctx, tmStr, hud.values.time,
+        hud.labels.time.left + segWidths.time,
+        hud.labels.level.left, hud.headline.baseY
+        );
+      placeValue.call(ctx, that.level, hud.values.level,
+        hud.labels.level.left + segWidths.level,
+        hud.labels.score.left, hud.headline.baseY
+        );
+      placeValue.call(ctx, that.score, hud.values.score,
+        hud.labels.score.left + segWidths.score,
+        ctx.canvas.width, hud.headline.baseY
+        );
+
+      if (this.scrollMessage) {
+        ctx.font = hud.statusline.messagesfont;
+        ctx.fillStyle = this.message.style;
+        ctx.textAlign = 'left';
+        ctx.fillText(this.message.text, this.position.x,
+          hud.statusline.baseY + ctx.canvas.height
+          );
+        segWidths.scroll = ctx.measureText(this.message.text).width;
+        this.scrollEnd = this.position.x + segWidths.scroll;
+        if (this.message.repeat) {
+          // NOTE: this is only handling right to left scrolling??
+          if (this.scrollEnd < 0) {
+            this.position.x = this.scrollEnd + this.message.gap;
+          }
+          while (this.scrollEnd + this.message.gap < ctx.canvas.width) {
+            ctx.fillText(this.message.text, this.scrollEnd + this.message.gap,
+              hud.statusline.baseY + ctx.canvas.height
+              );
+            this.scrollEnd += (this.message.gap + segWidths.scroll);
+          }
+        }
+      } else {
+        // No message is currently being scrolled, so show that 'static' data
+        ctx.font = hud.statusline.valuesfont;
+        placeValue.call(ctx, that.lives, hud.values.lives,
+          hud.labels.lives.left + segWidths.lives,
+          ctx.canvas.width, hud.statusline.baseY + ctx.canvas.height
+          );
+      }
+
+      ctx.restore();
+
     };// .function PaceCar.prototype.render()
 
     /////////////////////////////////////////////
