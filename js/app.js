@@ -226,16 +226,16 @@
    * @return {Number}
    */
   function setSpeed(newSpeed) {
-    this.privateSpeed = newSpeed;
+    this.private.speed = newSpeed;
     this.position.flipped = false;
     if (newSpeed < 0) {
       // need to use a horizontally flipped sprite.  Or place (done here) on
       // the canvas using a horizontally flipped coordinate system.
       this.position.flipped = true;
       // reversing X coordinates means the movement direction is reversed too.
-      this.privateSpeed = -newSpeed;
+      this.private.speed = -newSpeed;
     }
-    return this.privateSpeed;
+    return this.private.speed;
   }// ./function setSpeed(newSpeed)
 
   /**
@@ -249,7 +249,7 @@
    * @return {Number}
    */
   function getSpeed() {
-    return this.privateSpeed;
+    return this.private.speed;
   }// ./function getSpeed()
 
   /**
@@ -261,9 +261,9 @@
    * @return {Integer}
    */
   function setColumn(colNum) {
-    this.privateColumn = colNum;
+    this.private.column = colNum;
     this.position.x = (colNum * this.cell.width) + this.colOffset;
-    return this.privateColumn;
+    return this.private.column;
   }// ./function setColumn(colNum)
 
   /**
@@ -275,7 +275,7 @@
    * @return {Number}
    */
   function getColumn() {
-    return this.privateColumn;
+    return this.private.column;
   }// ./function getColumn()
 
   /**
@@ -287,9 +287,9 @@
    * @return {Integer}
    */
   function setRow(rowNum) {
-    this.privateRow = rowNum;
+    this.private.row = rowNum;
     this.position.y = (rowNum * this.cell.height) + this.rowOffset;
-    return this.privateRow;
+    return this.private.row;
   }// ./function setRow(rowNum)
 
   /**
@@ -301,7 +301,7 @@
    * @return {Number}
    */
   function getRow() {
-    return this.privateRow;
+    return this.private.row;
   }// ./function getRow()
 
   /**
@@ -322,6 +322,7 @@
    */
   function Enemy(imgRsrc, gridRow, ofstVert, speed, cvsContext, gridCell) {
     Sprite.call(this, imgRsrc, undefined, undefined, cvsContext);
+    this.private = {};// (psuedo) private storage for class instances
 
     // Add get and set for properties where setting has side effects
     Object.defineProperty(this, "speed", {
@@ -556,7 +557,7 @@
    * @return {string}
    */
   function getState() {
-    return this.privateState;
+    return this.private.state;
   }// ./function getState()
 
   /**
@@ -570,10 +571,10 @@
   function setState(newState) {
     var prevState;
     console.log((new Date()).toISOString() + ' changing state: "' +
-      this.privateState + '" ==> "' + newState + '"'
+      this.private.state + '" ==> "' + newState + '"'
       );
-    prevState = this.privateState;// if any logic needs to know the state path
-    this.privateState = newState;//TODO: add validation before setting?
+    prevState = this.private.state;// if any logic needs to know the state path
+    this.private.state = newState;//TODO: add validation before setting?
     this.elapsedTimes.state = 0;
     switch (newState) {
     case STATE_ENUM.waiting:
@@ -616,9 +617,9 @@
       this.player.sleeping = true;
     }
     console.log((new Date()).toISOString() + ' changed state: "' +
-      prevState + '" ==> "' + this.privateState + '"'
+      prevState + '" ==> "' + this.private.state + '"'
       );
-    return this.privateState;
+    return this.private.state;
   }// ./function setState(newState)
 
   /**
@@ -653,7 +654,7 @@
    * @return {string}
    */
   function getMessage() {
-    return this.privateMessage;
+    return this.private.message;
   }// ./function getMessage()
 
   /**
@@ -665,13 +666,13 @@
    * @return {string}
    */
   function setMessage(message) {
-    this.privateMessage = message;
+    this.private.message = message;
     // Setup to start displaying the new message
     this.scrollMessage = true;
     this.position.x = this.context.canvas.width;
     this.scrollEnd = this.position.x;
 
-    return this.privateMessage;
+    return this.private.message;
   }
 
   /**
@@ -681,6 +682,7 @@
    */
   function Frogger() {
     var that;
+    this.private = {};// (psuedo) private storage for class instances
 
     // Reasonably robust singleton class pattern implementation
     if (froggerInstance) {
@@ -720,6 +722,7 @@
       // Access outer function Frogger constructor 'this' context through 'that'
       Sprite.call(this, that.APP_CONFIG.enemy.spriteTile, 0,
         undefined, cvsContext);
+      this.private = {};// (psuedo) private storage for class instances
       this.speed = 0;// Not using the setter from Enemy
       this.scrollMessage = false;
       // Automatically update dependant properties on state changes
