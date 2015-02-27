@@ -138,19 +138,17 @@
     Sprite = function (imgRsrc, spriteX, spriteY, spriteContext) {
       this.id = __getNextId();
       this.sprite = imgRsrc;
-      // The coordinates of the (image for) the sprite within the owning
-      // application canvas.
-      if (spriteX !== undefined || spriteY !== undefined) {
-        this.position = {
-          x : spriteX,
-          y : spriteY
-        };
-      }
+      // Coordinates information for the (image for) the sprite within the
+      // containing application canvas.
+      this.position = {
+        "x" : spriteX,
+        "y" : spriteY,
+        "flipped" : false
+      };
       // Not actually required for the current application, but storing the
       // context in the Sprite instance supports having multiple canvases in
       // a single application.  And gets rid of the need for the global ctx.
       this.context = spriteContext;
-      this.flipped = false;
     };// ./function Sprite(imgRsrc, spriteX, spriteY, spriteContext)
     // complain about any other dangling "_" in variable names
     /*jslint nomen: false */
@@ -160,20 +158,6 @@
   }());// ./function Sprite()
 
   // Add the needed shared class method functions to the prototype
-
-  /**
-   * Reset the current transform to the identity transformation
-   *
-   * NOTE: it might be better to use an inverse transform operation (translate
-   *   then scale), instead of setting to identity: if other processing wants
-   *   to do their own transforms.  Like a straight translate to scroll the
-   *   playing field vertically.
-   *
-   * @return {undefined}
-   */
-  Sprite.prototype.setIdTransform = function () {
-    this.context.setTransform(1, 0, 0, 1, 0, 0);
-  };// ./function Sprite.prototype.setIdTransform()
 
   /**
    * Set the transform needed to flip the playing field coordinates horizontally
@@ -213,14 +197,15 @@
     // canvas area
     // Handle reversing the coordinate system, to display the graphic image
     // flipped horizontally
-    if (this.flipped) {// Reverse the x coordinates before drawing
+    if (this.position.flipped) {// Reverse the x coordinates before drawing
+      this.context.save();
       this.setFlipTransform();
     }
     this.context.drawImage(Resources.get(this.sprite),
       this.position.x, this.position.y
       );
-    if (this.flipped) {// Undo the swapped coordinate system
-      this.setIdTransform();
+    if (this.position.flipped) {// Undo the swapped coordinate system
+      this.context.restore();
     }
   };// ./function Sprite.prototype.render()
 
@@ -242,11 +227,11 @@
    */
   function setSpeed(newSpeed) {
     this.privateSpeed = newSpeed;
-    this.flipped = false;
+    this.position.flipped = false;
     if (newSpeed < 0) {
       // need to use a horizontally flipped sprite.  Or place (done here) on
       // the canvas using a horizontally flipped coordinate system.
-      this.flipped = true;
+      this.position.flipped = true;
       // reversing X coordinates means the movement direction is reversed too.
       this.privateSpeed = -newSpeed;
     }
@@ -257,7 +242,7 @@
    * Enemy class speed property getter function
    *
    * This will always be non-negative.  Reverse direction speeds are indicated
-   * by this.flipped being true.
+   * by this.position.flipped being true.
    * TODO: verify? changing the transform ?plus? set placement coordinate to 0
    * might work, and would simplify collision detection with flipped sprites
    *
@@ -352,7 +337,6 @@
       get : getRow
     });
 
-    this.position = {};
     if (gridCell) {
       this.cell = gridCell;
     } else {
