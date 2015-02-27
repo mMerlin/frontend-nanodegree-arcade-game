@@ -101,6 +101,33 @@
     // Private data for the class, accessible only be methods defined in the
     // current function scope
     var lastId, Sprite;
+
+    // Shared functions that do not really belong in the prototype.  Using
+    // (class private) function closure scope instead.
+
+    /*
+     * Store the canvas width in the position information, to use for flipping
+     *
+     * Sprite class context property setter function
+     *
+     * @param {CanvasRenderingContext2D} ctx 2Dcontext the sprite is drawn on
+     * @return {CanvasRenderingContext2D}
+     */
+    function setContext(ctx) {
+      this.private.context = ctx;
+      this.position.flipWidth = ctx.canvas.width;
+      return this.private.context;
+    }// ./function setContext(ctx)
+
+    /**
+     * Sprite class context property getter function
+     *
+     * @return {CanvasRenderingContext2D}
+     */
+    function getContext() {
+      return this.private.context;
+    }// ./function getContext()
+
     //The last used ID (serial number) for created Sprite instances.
     lastId = 0;
 
@@ -109,12 +136,10 @@
      *
      * @return {Integer} Sprite serial number
      */
-    // do not complain about the dangling "_" for the private method name
-    /*jslint nomen: true */
-    function __getNextId() {
+    function getNextId() {
       lastId += 1;
       return lastId;
-    }// ./function __getNextId()
+    }// ./function getNextId()
 
     /**
      * Constructor function for application sprite
@@ -136,7 +161,11 @@
      * @return {Object} Sprite instance
      */
     Sprite = function (imgRsrc, spriteX, spriteY, spriteContext) {
-      this.id = __getNextId();
+      this.private = {};// (psuedo) private storage for class instances
+      // If want 'real' private data, this could be stored in an object in the
+      // class private data area, and looked up based on the (unique) id.
+
+      this.id = getNextId();
       this.sprite = imgRsrc;
       // Coordinates information for the (image for) the sprite within the
       // containing application canvas.
@@ -145,13 +174,19 @@
         "y" : spriteY,
         "flipped" : false
       };
-      // Not actually required for the current application, but storing the
-      // context in the Sprite instance supports having multiple canvases in
-      // a single application.  And gets rid of the need for the global ctx.
-      this.context = spriteContext;
+
+      // Storing the context in the Sprite instance supports having multiple
+      // canvases in a single application, and gets rid of the need for a
+      // global reference
+      Object.defineProperty(this, "context", {
+        set : setContext,
+        get : getContext
+      });
+      if (spriteContext) {
+        this.context = spriteContext;
+      }
     };// ./function Sprite(imgRsrc, spriteX, spriteY, spriteContext)
     // complain about any other dangling "_" in variable names
-    /*jslint nomen: false */
 
     // Return the constructor function, with the linked function scope extras
     return Sprite;
@@ -322,7 +357,6 @@
    */
   function Enemy(imgRsrc, gridRow, ofstVert, speed, cvsContext, gridCell) {
     Sprite.call(this, imgRsrc, undefined, undefined, cvsContext);
-    this.private = {};// (psuedo) private storage for class instances
 
     // Add get and set for properties where setting has side effects
     Object.defineProperty(this, "speed", {
@@ -722,7 +756,6 @@
       // Access outer function Frogger constructor 'this' context through 'that'
       Sprite.call(this, that.APP_CONFIG.enemy.spriteTile, 0,
         undefined, cvsContext);
-      this.private = {};// (psuedo) private storage for class instances
       this.speed = 0;// Not using the setter from Enemy
       this.scrollMessage = false;
       // Automatically update dependant properties on state changes
