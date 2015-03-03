@@ -65,8 +65,8 @@
   /**
    * Create a custom event with fall back that works in IE (11 at least)
    *
-   * @ @param {string} evName  The name for the custom event
-   * @ @param {Object} evObj   The properties to include in the event details.
+   * @param {string} evName  The name for the custom event
+   * @param {Object} evObj   The properties to include in the event details.
    * @returns {CustomEvent}
    */
   function makeCustomEvent(evName, evObj) {
@@ -104,20 +104,6 @@
 
     // Shared functions that do not really belong in the prototype.  Using
     // (class private) function closure scope instead.
-
-    /*
-     * Store the canvas width in the position information, to use for flipping
-     *
-     * Sprite class context property setter function
-     *
-     * @param {CanvasRenderingContext2D} ctx 2Dcontext the sprite is drawn on
-     * @return {CanvasRenderingContext2D}
-     */
-    function setContext(ctx) {
-      this.private.context = ctx;
-      this.position.flipWidth = ctx.canvas.width;
-      return this.private.context;
-    }// ./function setContext(ctx)
 
     /**
      * Sprite class context property getter function
@@ -167,7 +153,7 @@
 
       this.id = getNextId();
       this.sprite = imgRsrc;
-      // Coordinates information for the (image for) the sprite within the
+      // Coordinate information for the (image for) the sprite within the
       // containing application canvas.
       this.position = {
         "x" : spriteX,
@@ -178,15 +164,8 @@
       // Storing the context in the Sprite instance supports having multiple
       // canvases in a single application, and gets rid of the need for a
       // global reference
-      Object.defineProperty(this, "context", {
-        set : setContext,
-        get : getContext
-      });
-      if (spriteContext) {
-        this.context = spriteContext;
-      }
+      this.context = spriteContext;
     };// ./function Sprite(imgRsrc, spriteX, spriteY, spriteContext)
-    // complain about any other dangling "_" in variable names
 
     // Return the constructor function, with the linked function scope extras
     return Sprite;
@@ -199,28 +178,18 @@
    *
    * @return {undefined}
    */
-  Sprite.prototype.setFlipTransform = function () {
+  Sprite.prototype.setFlipTransform = function (offset) {
     // scale(-1, 1) === transform(-1, 0, 0, 1, 0, 0)//horizontal flip
     // w = this.context.canvas.width;
     // translate(-w, 0) === transform(1, 0, 0, 1, -w, 0)
     // http://bucephalus.org/text/CanvasHandbook/CanvasHandbook.html#fn22
     // combined => transform(-1, 0, 0, 1, -w, 0)
-    this.context.setTransform(-1, 0, 0, 1, this.context.canvas.width, 0);
-    // TODO: think: would this need to use any playing field offset value(s)?
+    this.context.setTransform(-1, 0, 0, 1, offset, 0);
     // var calcTransform = composeTransform(
     //   [-1, 0, 0, 1, 0, 0],
-    //   [1, 0, 0, 1, -w, 0]//testing seems to use w, not -w
+    //   [1, 0, 0, 1, -w, 0]
     // );
-  };// ./function Sprite.prototype.setFlipTransform()
-
-  // Getter and Setter functions are not needed, unless something more than
-  // simple property reading and writing is required.  Additional work would
-  // be needed to hide the private instance variables in a function scope.
-  // For now, just access the instance properties directly.
-  // Sprite.prototype.setImage = function (imgRsrc) {
-  //   this.sprite = imgRsrc;
-  // };
-  // instance.sprite = imgRsrc;
+  };// ./function Sprite.prototype.setFlipTransform(offset)
 
   /**
    * Display the sprite on its canvas
@@ -232,9 +201,12 @@
     // canvas area
     // Handle reversing the coordinate system, to display the graphic image
     // flipped horizontally
-    if (this.position.flipped) {// Reverse the x coordinates before drawing
+    if (this.position.flipped) {
       this.context.save();
-      this.setFlipTransform();
+      // The 'simplest' horizontal flip uses offset cell.width with draw at -.x
+      // To reduce code duplication, using offset cell.width + 2 * .x, and
+      // draw at .x, so the draw is the same for either case
+      this.setFlipTransform(this.cell.width + 2 * this.position.x);
     }
     this.context.drawImage(Resources.get(this.sprite),
       this.position.x, this.position.y
@@ -243,6 +215,20 @@
       this.context.restore();
     }
   };// ./function Sprite.prototype.render()
+
+  // /**
+  //  * Do the sprite coordinates make it (at least partially) visible on the
+  //  * canvas?
+  //  *
+  //  * @return {boolean}
+  //  */
+  // Sprite.prototype.isOnCanvas = function () {
+  //   return (
+  //     this.position.x > 0 - /* (sprite width - left padding) */ &&
+  //     this.position.y > 0 - /* (sprite height - top padding) */ &&
+  //     this.position.x < this.context.canvas.width &&
+  //     this.position.y < this.context.canvas.height );
+  // };// ./function Sprite.prototype.isOnCanvas()
 
 
   ////////////////////////////////////////////////
@@ -267,8 +253,6 @@
       // need to use a horizontally flipped sprite.  Or place (done here) on
       // the canvas using a horizontally flipped coordinate system.
       this.position.flipped = true;
-      // reversing X coordinates means the movement direction is reversed too.
-      this.private.speed = -newSpeed;
     }
     return this.private.speed;
   }// ./function setSpeed(newSpeed)
@@ -403,6 +387,44 @@
   Enemy.prototype.update = function (dt) {
     this.position.x += (this.speed * dt);// standard distance formula: Δs=v*Δt
   };// ./function Enemy.prototype.update(dt)
+
+  /**
+   * Do the sprite coordinates make it (at least partially) visible on the canvas
+   *
+   * For the way the class is used, the sprite is always on the canvas
+   * vertically.  Just need to check the x coordinate.
+   *
+   * @return {boolean}
+   */
+  Enemy.prototype.isOnCanvas = function () {
+    // .x > (0 - (.cell.width - .colOffset))
+    // .x > (.colOffset - .cell.width)
+    var offsetX = this.position.x - this.colOffset;
+    return (
+      (offsetX > -this.cell.width) &&
+      (offsetX < this.context.canvas.width)
+    );
+      // this.position.x > (this.colOffset - this.cell.width) &&
+      // this.position.x < (this.context.canvas.width + this.colOffset) &&
+  };// ./function Enemy.prototype.isOnCanvas()
+
+  /**
+   * Has the sprite moved off of the canvas (is no longer visible)
+   *
+   * NOTE: This is NOT the reverse of .isOnCanvas.  Only sprites that are beyond
+   * the far end of the canvas (based on movement direction) will return true
+   * here.  Sprites that have not started across the canvas, or currently on
+   * the canvas, will return false.
+   *
+   * @return {boolean}
+   */
+  Enemy.prototype.isOffEnd = function () {
+    // if (this.position.flipped) {
+    if (this.speed < 0) {
+      return (this.position.x - this.colOffset <= -this.cell.width);
+    }
+    return (this.position.x - this.colOffset >= this.context.canvas.width);
+  };// ./function prototype.isOffEnd()
 
 
   ////////////////////////////////////////////////
@@ -1104,7 +1126,7 @@
                   "seconds" : 60,
                   "startDistance" : 0,
                   "speed" : -40,
-                  "distances" : [2.8, 2.8, 2.8, 5.6]
+                  "distances" : [-2.8, -2.8, -2.8, -5.6]
                 }
               ],
               [
@@ -1306,9 +1328,7 @@
     // If there is reason to add another sprite at the end of the circular
     // buffer, and the sprite at the head of the buffer has exited the visible
     // playing field, it should be safe to recycle.
-    if (this.enemySprites[row][rowState.head].position.x >=
-        this.limits.recycleSpriteX
-        ) {
+    if (this.enemySprites[row][rowState.head].isOffEnd()) {
       this.recycleSprite(row);
     }
 
@@ -1341,7 +1361,7 @@
     }
 
     return distance;
-  };// ./function Frogger.prototype.nextDistance()
+  };// ./function Frogger.prototype.nextDistance(row)
 
   /**
    * Remove the sprite from the head of the circular buffer
@@ -1355,7 +1375,7 @@
 
     // Stop and queue the sprite
     this.enemySprites[row][rowState.head].speed = 0;
-    this.enemySprites[row][rowState.head].position.x = this.limits.queuedSpriteX;
+    this.enemySprites[row][rowState.head].position.x = this.limits.offLeftX;
 
     // Change the front sprite to the next one in the buffer.
     //rowState.head = (rowState.head + 1) % this.APP_CONFIG.enemy.maxSprites[row];
@@ -1427,10 +1447,11 @@
           sprite += 1
           ) {
         this.enemySprites[row][sprite].speed = 0;
-        this.enemySprites[row][sprite].position.x = this.limits.queuedSpriteX;
+        this.enemySprites[row][sprite].position.x = this.limits.offLeftX;
       }
       // Move the first sprite for each row to just after the canvas
-      this.enemySprites[row][0].position.x = this.limits.recycleSpriteX;
+      // NOTE: speed is always zero here, so no difference for negative speed
+      this.enemySprites[row][0].position.x = this.limits.offRightX;
     }
 
     // Move the player avatar back to the starting location
@@ -1484,9 +1505,9 @@
     // Grab the x coordinates that corresponds to column -1, and the first grid
     // column after the visible grid, to check when sprites are not yet, or
     // no longer, visible.
-    this.limits.queuedSpriteX = this.enemySprites[0][0].position.x;
+    this.limits.offLeftX = this.enemySprites[0][0].position.x;
     this.enemySprites[0][0].col = this.GAME_BOARD.canvas.gridCols;
-    this.limits.recycleSpriteX = this.enemySprites[0][0].position.x;
+    this.limits.offRightX = this.enemySprites[0][0].position.x;
 
     cfg = this.APP_CONFIG.player;
     this.player = new Avatar(cfg.spriteTile, cfg.start.row, cfg.start.col,
@@ -1577,6 +1598,53 @@
   };// ./function Frogger.prototype.start(cvsContext)
 
   /**
+   * Position and activate the first (leading) sprite in a pattern
+   *
+   * Scenarios:
+   *  Level Startup: 2 sprites in cycle, both stopped
+   *  Same direction as previous, new spacing and/or speed
+   *  reverse direction
+   *
+   * @param {Integer} rowIndex      The pattern row number
+   * @param {Number} startDistance  The distance from old to new pattern
+   * @return {undefined}
+   */
+  Frogger.prototype.initPattern = function (rowIndex, startDistance) {
+    var sprites, pattern;
+    pattern = this.currentPatterns[rowIndex];
+    sprites = this.enemySprites[rowIndex];
+
+    // This needs to be smarter to handle more of the intended cases.  For now,
+    // just get it setup for the base case of one pattern per level, but add
+    // sanity checks to make sure that is REALLY the scenario.
+    if ((startDistance !== 0) ||
+        (pattern.head !== 0) ||
+        (pattern.tail !== 1) ||
+        (sprites[pattern.tail].speed !== 0) ||
+        (sprites[pattern.head].speed !== 0) ||
+        (this.lastVisible(rowIndex) !== pattern.head)
+        ) {
+      throw new Error('unknown pattern change combination for level ' +
+        this.level
+        );
+    }
+
+    // startDistance === 0; replace existing sprite settings
+    // sprites[vSprite].isOffEnd(); use pattern.tail
+    sprites[pattern.tail].speed = pattern.speed;
+    if (pattern.speed < 0) {
+      sprites[pattern.tail].position.x = this.limits.offRightX;
+    } else {
+      sprites[pattern.tail].position.x = this.limits.offLeftX;
+    }
+
+    // TODO: 'intelligence' for switching patterns
+    //  - make sure to keep enough info around for case where the distance
+    //    can leave the whole row blank for awhile.
+    //  - differences if speed changes
+  };// ./function Frogger.prototype.initPattern(rowIndex, startDistance)
+
+  /**
    * Change to next movement pattern when an active pattern expires
    *
    * Patterns typically change at the start of each level, but they CAN also
@@ -1585,13 +1653,11 @@
    * @return {undefined}
    */
   Frogger.prototype.cycleEnemyPatterns = function () {
-    var lvlConfig, row, rowConfig, rowState, rowEnemies,
-      ptrnConfig, nSprite, vSprite;
+    var lvlConfig, row, rowConfig, rowState, ptrnConfig;
     lvlConfig = this.APP_CONFIG.enemy.levels[this.lvlIndex];
 
     for (row = 0; row < this.currentPatterns.length; row += 1) {
       rowState = this.currentPatterns[row];
-      rowEnemies = this.enemySprites[row];
       // hpd idea: include/use rowState.expired boolean, set by .next? (when
       // app.state changes to 'waiting', AND currently patternIdx = -1 ?)
       if (this.elapsedTimes.level >= rowState.expires) {
@@ -1602,7 +1668,8 @@
         // Index into rowConfig for the active pattern, increment and wrap to
         // zero when >= .length
         // rowState.currentPattern = incrementAndWrap(
-        //   rowState.currentPattern, rowConfig.length)
+        //   rowState.currentPattern, rowConfig.length
+        // );
         // rowState.currentPattern = (rowState.currentPattern + 1) %
         //   rowConfig.length;
         rowState.currentPattern += 1;
@@ -1635,44 +1702,9 @@
         // Set the time when the new pattern ends, and the following one starts
         rowState.expires += rowState.seconds;
 
-        // Figure out where to position the first (leading) sprite in the new
-        // pattern.
-        vSprite = this.lastVisible(row);// Last (maybe) visible sprite
-        if (ptrnConfig.startDistance === 0) {
-          // Replace the last visible sprite from the previous pattern with
-          // first (leading) sprite in the new pattern.
-          if (rowEnemies[vSprite].position.x >= this.limits.recycleSpriteX) {
-            // What should have been the last visible sprite has actually moved
-            // off of the canvas.  Use the queued sprite instead.
-            vSprite = rowState.tail;
-          }
-          nSprite = vSprite;// New sprite is same as visible sprite
-        } else {// !(ptrnConfig.startDistance === 0)
-          // Place the leading sprite for the new pattern .startDistance behind
-          // the last visible sprite from the previous pattern
-          if ((rowEnemies[vSprite].position.x - ptrnConfig.startDistance) >
-              this.limits.queuedSpriteX
-              ) {
-            // The targeted start point would teleport the sprite onto the
-            // visible canvas: position it behind the queued sprite for the
-            // previous pattern instead
-            vSprite = rowState.tail;
-            // Pull another sprite into the active circular buffer of sprites
-            this.addSprite(row);
-          }
-          // Update the sprite (now) at the end of the circular buffer to be
-          // a the configured starting distance behind the last visible sprite
-          nSprite = rowState.tail;
-          rowEnemies[nSprite].position.x =
-            rowEnemies[vSprite].position.x - ptrnConfig.startDistance;
-        }
-        // Set the speed for the first sprite of the new pattern
-        rowEnemies[nSprite].speed = rowState.speed;
+        // Activate the first (leading) sprite in the new pattern
+        this.initPattern(row, ptrnConfig.startDistance);
 
-        // TODO: 'intelligence' for switching patterns
-        //  - make sure to keep enough info around for case where the distance
-        //    can leave the whole row blank for awhile.
-        //  - differences if speed changes
       }// ./if (this.elapsedTimes.level >= rowState.expires)
     }// ./for (row = 0; row < this.currentPatterns.length; row += 1)
   };// ./function Frogger.prototype.cycleEnemyPatterns()
@@ -1688,7 +1720,7 @@
     for (row = 0; row < this.currentPatterns.length; row += 1) {
       rowState = this.currentPatterns[row];
       rowEnemies = this.enemySprites[row];
-      if (rowEnemies[rowState.tail].position.x > this.limits.queuedSpriteX) {
+      if (rowEnemies[rowState.tail].isOnCanvas()) {
         // Current queued enemy sprite has become visible
         lastX = rowEnemies[rowState.tail].position.x;// Visible sprite position
         this.addSprite(row);// Pull a sprite from the recycled set.
