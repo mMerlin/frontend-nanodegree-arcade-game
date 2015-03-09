@@ -359,11 +359,6 @@
   /**
    * Enemy class speed property getter function
    *
-   * This will always be non-negative.  Reverse direction speeds are indicated
-   * by this.position.flipped being true.
-   * TODO: verify? changing the transform ?plus? set placement coordinate to 0
-   * might work, and would simplify collision detection with flipped sprites
-   *
    * @return {Number}
    */
   function getSpeed() {
@@ -1460,17 +1455,10 @@
     this.tracker = new PaceCar();
     this.state = STATE_ENUM.waiting;
 
-    // add a dummy enemy object to the start of the list.  Use to:
+    // add dummy tracker enemy object to the start of the list.  Use to:
     // - check for collisions
     // - stop enemies that have gone off canvas
     // - start enemies that are due to enter the canvas
-    //   - gridCol = -1; gridColToX(); speed = getSpeed(gridRow, level, time);
-    //   - there should always be at least 2 active enemies per row:??
-    //     - one visible / front, and one queued
-    //     - with large separation distance, only one?
-    //       - previous has gone off of the screen and been stopped
-    //       - next is queued/active, but not on the screen yet; next will be
-    //         queued when this one goes visible.
     // - pre_update callback?
 
     console.log((new Date()).toISOString() + ' waiting for engineReady');
@@ -1939,24 +1927,24 @@
   /**
    * Check for player avatar collisions with anything that is going to change
    * game state
-
+   *
    * @return {boolean}    Was state changing collision detected?
    */
   Frogger.prototype.collisionCheck = function () {
     var goal, goals;
     /* None of the collision detection needs to worry about the y coordinate in
-     * more detail that the grid row.  None of the game features can be placed
+     * more detail than the grid row.  None of the game features can be placed
      * (vertically) outside a row.  At least as far as collision detection is
      * concerned.  Offsets are used for visual adjustments, but do not affect
-     * the location for vertical position. */
+     * the location for vertical positioning. */
 
     // check for collision with 'prize' sprites
-    /* Check for prize collection first, so can collect when it is sitting past
-       the goal line. */
+    /* Check for prize collection first, so can collect when landing on it while
+       moving past the goal line. */
     //TODO: if (this.player.row <= this.APP_CONFIG.game.start.row)
     // This does NOT change game state, so do not return anything yet
 
-    // check for collision with 'goal' check for success before check for fail
+    // check for collision with 'goal'; check for success before check for fail
     goals = this.currentSettings.goal;
     for (goal = 0; goal < goals.length; goal += 1) {
       if (this.player.row === goals[goal].row &&
