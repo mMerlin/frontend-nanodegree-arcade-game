@@ -105,15 +105,6 @@
     // Shared functions that do not really belong in the prototype.  Using
     // (class private) function closure scope instead.
 
-    /**
-     * Sprite class context property getter function
-     *
-     * @return {CanvasRenderingContext2D}
-     */
-    function getContext() {
-      return this.private.context;
-    }// ./function getContext()
-
     //The last used ID (serial number) for created Sprite instances.
     lastId = 0;
 
@@ -641,8 +632,12 @@
       this.player.sleeping = false;
       break;
     case STATE_ENUM.newlevel:
+      this.lvlIndex += 1;
+      // TODO: handle (better) if this.lvlIndex >= max configured levels
+      if (this.lvlIndex >= this.APP_CONFIG.enemy.levels.length) {
+        throw new Error('Game broken, no level ' + this.level + ' configuration');
+      }
       // Set timeout value (for the state), then switch to running?
-      // if previous state was running??
       this.state = STATE_ENUM.waiting;
       break;
     case STATE_ENUM.dieing:
@@ -655,7 +650,9 @@
     case STATE_ENUM.resurrect:
       this.player.resurrect();
       this.lives -= 1;
-      // TODO: alternate path when this.lives < 0
+      if (this.lives <= 0) {
+        throw new Error('Not Implemented: game over');
+      }
       // - space to start message ? game over? start game over in above
       this.state = STATE_ENUM.waiting;
       break;
@@ -722,7 +719,7 @@
    * @return {string}
    */
   function setMessage(message) {
-    this.private.message = message;
+    this.private.message = message;// Immutable
     // Setup to start displaying the new message
     this.scrollMessage = true;
     this.position.x = this.context.canvas.width;
@@ -910,7 +907,7 @@
 
       segWidths = {};
       // TODO: IDEA: change the time label colour (style) based on time remaining
-      // style = styleCalc(that.levelTime, that.elapsedTimes.level);
+      // stl = styleCalc(that.currentSettings.levelTime, that.elapsedTimes.level);
       // green>>yellow>>red
       segWidths.time = placeLabel.call(ctx, hud.labels.time, hud.headline.baseY);
       segWidths.level = placeLabel.call(ctx, hud.labels.level,
@@ -931,7 +928,7 @@
       ctx.font = hud.headline.valuesfont;
       ctx.fillStyle = hud.values.style;
 
-      tm = that.levelTime - that.elapsedTimes.level;
+      tm = that.currentSettings.levelTime - that.elapsedTimes.level;
       tmStr = Number(tm).toFixed(1);
       //zfStr = (tm < 99.5) ? ('00' + tmStr).slice(-4) : tmStr;//leading zeros
       placeValue.call(ctx, tmStr, hud.values.time,
@@ -1052,7 +1049,7 @@
      * in place of explicit values in many places.
      *
      * enemy {Object}
-     *   spriteTile {string}   URL / resource key for all(?) enemy icons
+     *   spriteTile {string}  URL / resource key for all(?) enemy icons
      *   vertialOffset {Integer} Offset (pixels) to align to playing field grid
      *   maxSprites {Array}   Maximum number of enemy sprites that will be
      *                        needed simultaneously for each row.  This includes
@@ -1101,7 +1098,46 @@
      *     startDistance {Number} Change from previous pattern startDistance
      *     speed {Integer}    Change from previous pattern speed
      *     distance {Array of Number} Changes to previous pattern distances
-     * player {Object}
+     * player {Object}        Configuration information for player avatar
+     *   spriteTile {string}  URL for (initial) player avatar sprite
+     *   start {Object}       Player settings for the start of game and level
+     *     row {Integer}      The grid row to start from for each level
+     *     col {Integer}      The grid column to start from for each level
+     *     lives {Integer}    The number of lives at the start of the game
+     * hud {Object}
+     *   headline {Object}    Configuration for drawing text at canvas top
+     *     baseY {Integer}    Pixel offset from top of canvas for text drawing
+     *     height {Integer}   Pixel height of text area (for clearing)
+     *     labelsfont {string} Font to use when drawing labels
+     *     valuesfont {string} Font to use when drawing values
+     *   statusline {Object}  Configuration for drawing text at canvas bottom
+     *     baseY {Integer}    Pixel offset from bottom of canvas for text drawing
+     *     height {Integer}   Pixel height of text area (for clearing)
+     *     labelsfont {string} Font to use when drawing labels
+     *     valuesfont {string} Font to use when drawing values
+     *     messagesfont {string} Font to use when drawing (scrolling) messages
+     *     templates {Object} Configuration for individual scrolling messages
+     *       each_added_property {Object} One property per scrolling messages
+     *         text {string}  (base) message text
+     *         speed {Number} Message scrolling speed (pixels/second)
+     *         style {string} Text (drawing) style for message
+     *         repeat {boolean} Repeat message (infinite loop)
+     *         gap {Number}   Separation (pixels) between repeated messages
+     *   labels {Object}      Configuration for drawing labels
+     *     style {string}     (base) text (drawing) style for labels
+     *     each_label_property {Object} One property per drawn label
+     *       style {string}   (override) text (drawing) style for label
+     *       text {string}    Label text content
+     *       left {Integer}   left padding for label
+     *       maxWidth {Integer} maximum drawing width (pixels) to use drawing
+     *   values {Object}      Configuration for drawing labels
+     *     font {string}      Font to use when drawing values
+     *     style {string}     text (drawing) style for values
+     *     each_label_property {Object} One property per drawn value
+     *       align {string}   Text align to use when drawing value
+     *       margin {Object}  Margins to use when drawing the value
+     *         left {Integer} Left margin
+     *         right {Integer} Right margin
      */
     this.APP_CONFIG = {
       "enemy" : {
@@ -1257,10 +1293,12 @@
       get : getState
     });
 
-    this.lvlIndex = 0;
+    this.lvlIndex = -1; //So first init will get to level 0
     this.score = 0;
     this.lives = this.APP_CONFIG.player.start.lives;
-    this.levelTime = 0;
+    this.currentSettings = {
+      "levelTime" : 0
+    };
     this.limits = {};
     this.elapsedTimes = {};
     this.tracker = new PaceCar();
@@ -1414,22 +1452,18 @@
   Frogger.prototype.initLevel = function () {
     var lvlConfig, row, sprite;
     console.log((new Date()).toISOString() + ' reached Frogger.initLevel');
-    // TODO: handle (better) if this.lvlIndex >= max configured levels
-    if (this.lvlIndex >= this.APP_CONFIG.enemy.levels.length) {
-      throw new Error('Game broken, no level ' + this.level + ' configuration');
-    }
+    this.state = STATE_ENUM.newlevel;
     lvlConfig = this.APP_CONFIG.enemy.levels[this.lvlIndex];
 
     if (lvlConfig.length) {
-      this.levelTime = lvlConfig.length;
+      this.currentSettings.levelTime = lvlConfig.length;
     }
     if (lvlConfig.delta) {
       if (lvlConfig.delta.length) {
-        this.levelTime += lvlConfig.delta.length;
+        this.currentSettings.levelTime += lvlConfig.delta.length;
       }
     }
 
-    this.state = STATE_ENUM.newlevel;
     // Build the initial level pattern configuration for each enemy row.  See
     // this.APP_CONFIG.enemy.reset for entry property descriptions.
     delete this.currentPatterns;
@@ -1710,7 +1744,7 @@
   };// ./function Frogger.prototype.cycleEnemyPatterns()
 
   /**
-   * Add enemies to the active queue when the current queued sprites become
+   * Add next enemy to the active queue when the current queued sprite becomes
    * visible.
    *
    * @return {undefined}
@@ -1744,10 +1778,10 @@
     manageTime.call(this, deltaTime);
 
     // Check for level time limit exceeded first
-    if (this.elapsedTimes.level > this.levelTime) {
+    if (this.elapsedTimes.level > this.currentSettings.levelTime) {
       // Time has expired for the current level.  Avatar dies (from exposure)
       this.reason = 'from exposure @' + this.elapsedTimes.level + ' on level ' +
-          this.level + ', with limit of ' + this.levelTime;
+          this.level + ', with limit of ' + this.currentSettings.levelTime;
       this.state = STATE_ENUM.dieing;
     }
 
@@ -1859,7 +1893,7 @@
   // TODO: Remove app.game namespace? Currently there does not seem to be any
   // need for it.  The game should be able to run completely inside the current
   // anonymous function.  Except for (maybe) this.GAME_BOARD, the animation
-  // engine only works with objects passed to in the engingNs properties
+  // engine only works with objects passed to it in the engineNs properties
   app.game = new Frogger();
 
 }());// ./function anonymous()
