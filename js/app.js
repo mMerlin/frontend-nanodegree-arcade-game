@@ -82,6 +82,114 @@
     return cstEvnt;
   }// ./function makeCustomEvent(evName, evObj)
 
+  /**
+   * Check if the current ('this') array contains a specific element / value
+   *
+   * This only does a direct equality compare.  Deeply matching identical
+   * objects will still not match, if they are not the same instance.
+   *
+   * @param {object} obj        The element / value to look for
+   * @returns {boolean}
+   */
+  function arrayContains(obj) {
+    var i;
+
+    for (i = 0; i < this.length; i += 1) {
+      if (this[i] === obj) { return true; }
+    }
+
+    return false;
+  }// ./function arrayContains(obj)
+
+  /**
+   * Create a deep copy of the passed argument.
+   *
+   * Enumerable properties are duplicated, prototypes are copied.
+   *
+   * Function objects are passed directly (as references), not explicitly
+   * copied, but since the contents of a function should be immutable, that
+   * should not cause any problems.  The context of the function will be its
+   * destination.
+   *
+   * NOTE: Memory says that some browsers (versions?) show 'object' for
+   * typeof function, but I found no references.
+   *
+   * @param {object} obj        The object to (deep) copy
+   * @returns {object}
+   */
+  function deepCopyOf(obj) {
+    var copiedObj, k;
+    if (obj === null) { return null; }
+    // Anything that is NOT some sort of object can be treated as a primitive
+    // data type, and returned directly as the result.  Including functions.
+    if (typeof obj !== 'object') { return obj; }
+
+    // Now for the 'hard' part.  Building a copy of an object.
+
+    // TODO: Array processing not tested
+    if (obj instanceof Array) {
+      copiedObj = Object.create(obj.constructor.prototype);
+      // copiedObj = [];
+      // copiedObj.prototype = Object.create(obj.prototype);
+      // copiedObj.prototype.constructor = obj.prototype.constructor;
+      for (k = 0; k < obj.length; k += 1) {
+        copiedObj.push(deepCopyOf(obj[k]));
+      }
+      return copiedObj;
+    }// ./ if (obj instanceof Array)
+
+    // TODO: This may need extra detection/handling for regex, which shows type
+    // object
+    copiedObj = Object.create(obj.constructor.prototype);
+    for (k in obj) {
+      if (obj.hasOwnProperty(k)) {
+        copiedObj[k] = deepCopyOf(obj[k]);
+      }
+    }// ./ for (k in obj)
+    return copiedObj;
+
+  }// ./function deepCopyOf(obj)
+
+  /**
+   * Deep merge object properties, recursively, making copies.
+   *
+   * This function is expected to be called in the context of an object. 'this'
+   * is the object to be modified.
+   *
+   * This function handles 'primitive' properties, regular objects, and arrays.
+   *
+   * @param {object} obj        The array element to look for
+   * @returns {object}          The modified object
+   */
+  // Currently not using mergeProperties; deepCopyOf is sufficient so far
+  // function mergeProperties(obj) {
+  //   var p;
+  //
+  //   // Do validation checks on the operands: both should be objects, and not
+  //   // arrays.
+  //   p = typeof this;
+  //   if (p !== 'object') {
+  //     throw new Error('Can not merge properties into a ' + p);
+  //   }
+  //   if (this instanceof Array) {
+  //     throw new Error('Can not merge properties into an array');
+  //   }
+  //   p = typeof obj;
+  //   if (p !== 'object') {
+  //     throw new Error('Can not merge a ' + p + ' into an object');
+  //   }
+  //   if (obj instanceof Array) {
+  //     throw new Error('Can not merge array properties into an object');
+  //   }
+  //
+  //   for (p in obj) {
+  //     if (obj.hasOwnProperty(p)) {
+  //       this[p] = deepCopyOf(obj[p]);
+  //     }
+  //   }
+  //
+  //   return this;
+  // }// ./function mergeProperties(obj)
 
   ///////////////////////////////////////////
   // Create Sprite (pseudoclassical) Class //
@@ -582,6 +690,7 @@
   STATE_ENUM = {
     "waiting" : "waiting",
     "dieing" : "Avatar dieing",
+    "donelevel" : "scored goal",
     "resurrect" : "resurrect",
     "newlevel" : "new level",
     "running" : "running"
@@ -616,7 +725,7 @@
    * @return {string}
    */
   function setState(newState) {
-    var prevState;
+    var prevState, tmpMsg, tm;
     console.log((new Date()).toISOString() + ' changing state: "' +
       this.private.state + '" ==> "' + newState + '"'
       );
@@ -637,6 +746,7 @@
       if (this.lvlIndex >= this.APP_CONFIG.enemy.levels.length) {
         throw new Error('Game broken, no level ' + this.level + ' configuration');
       }
+
       // Set timeout value (for the state), then switch to running?
       this.state = STATE_ENUM.waiting;
       break;
@@ -646,6 +756,22 @@
       //this.finiteState.next = STATE_ENUM.resurrect;
       //this.finiteState.delay = 5;//seconds for death throes
       // = this.APP_CONFIG. ? .displayDeath;
+      break;
+    case STATE_ENUM.donelevel:
+      this.player.sleeping = true;
+      tm = this.currentSettings.levelTime - this.elapsedTimes.level;
+      tmpMsg = deepCopyOf(this.APP_CONFIG.hud.statusline.templates.levelComplete);
+      // TODO: utility textInterpolate(array)
+      // tmpMsg.text = textInterpolate.call(tmpMsg.text,
+      //   [this.level, Number(tm.toFixed(1))]);
+      tmpMsg.text = tmpMsg.text.
+        replace('{1}', this.level).
+        replace('{2}', Number(tm).toFixed(1));
+      this.tracker.message = tmpMsg;
+      //this.finiteState.next = STATE_ENUM.newlevel;
+      // tie state change to scrolling message completing
+      // TODO: (or being aborted by user: SPACE command)
+      //HPD
       break;
     case STATE_ENUM.resurrect:
       this.player.resurrect();
@@ -803,6 +929,10 @@
           this.scrollMessage = false;
           this.position.x = this.context.canvas.width;
           this.scrollEnd = this.position.x;
+          if (this.message.changestate) {
+            throw new Error('Not Implemented: next finitestate');
+            // TODO: this.finitestate.next
+          }
         } else {
           this.position.x += this.message.speed * deltaTime;
         }
@@ -1061,10 +1191,6 @@
      *                        travel on.
      *   levels {Array}       One {Object} entry per game level
      *                    ??  need a way to continue past configured levels ??
-     *     length {Number}    The actual length of time (seconds) allowed to
-     *                        complete the level (without dieing)
-     *     delta {Object}     Values to adjust from previous level settings
-     *       length {Number}  Change from previous level length
      *     rows {Array}       One {Array} entry per enemy (travelled) grid row
      *       {Array}          One {Object} entry per movement pattern used for
      *                        the level, row, and pattern
@@ -1104,6 +1230,14 @@
      *     row {Integer}      The grid row to start from for each level
      *     col {Integer}      The grid column to start from for each level
      *     lives {Integer}    The number of lives at the start of the game
+
+     * game {Object}
+     *   levels {Array}       One {Object} entry per game level
+     *                    ??  need a way to continue past configured levels ??
+     *     length {Number}    The actual length of time (seconds) allowed to
+     *                        complete the level (without dieing)
+     *     delta {Object}     Values to adjust from previous level settings
+     *       length {Number}  Change from previous level length
      * hud {Object}
      *   headline {Object}    Configuration for drawing text at canvas top
      *     baseY {Integer}    Pixel offset from top of canvas for text drawing
@@ -1123,6 +1257,8 @@
      *         style {string} Text (drawing) style for message
      *         repeat {boolean} Repeat message (infinite loop)
      *         gap {Number}   Separation (pixels) between repeated messages
+     *         changestate {boolean} Advance to pending game state at end of
+     *                        message (never when repeat)
      *   labels {Object}      Configuration for drawing labels
      *     style {string}     (base) text (drawing) style for labels
      *     each_label_property {Object} One property per drawn label
@@ -1138,6 +1274,7 @@
      *       margin {Object}  Margins to use when drawing the value
      *         left {Integer} Left margin
      *         right {Integer} Right margin
+     *
      */
     this.APP_CONFIG = {
       "enemy" : {
@@ -1147,7 +1284,6 @@
         "topRow" : 1,
         "levels" : [
           {
-            "length" : 10,
             "rows" : [
               [
                 {
@@ -1200,6 +1336,19 @@
         "verticalOffset" : -30,
         "horizontalOffset" : 0
       },
+      "game" : {
+        "levels" : [
+          {
+            "length" : 10,
+            "goal" : [
+              {
+                "row" : 0,
+                "cols" : [0, 1, 2, 3, 4]
+              }
+            ]
+          }
+        ]
+      },
       "hud" : {
         "headline" : {
           "baseY" : 40,
@@ -1220,6 +1369,13 @@
               "style" : "red",
               "repeat" : true,
               "gap" : 150
+            },
+            "levelComplete" : {
+              "text" : "Level {1} Complete with {2} seconds left",
+              "speed" : -150,
+              "style" : "green",
+              "repeat" : false,
+              "changestate" : true
             }
           }
         },
@@ -1450,19 +1606,11 @@
    * @return {undefined}
    */
   Frogger.prototype.initLevel = function () {
-    var lvlConfig, row, sprite;
+    var gamConfig, row, sprite;
     console.log((new Date()).toISOString() + ' reached Frogger.initLevel');
     this.state = STATE_ENUM.newlevel;
-    lvlConfig = this.APP_CONFIG.enemy.levels[this.lvlIndex];
 
-    if (lvlConfig.length) {
-      this.currentSettings.levelTime = lvlConfig.length;
-    }
-    if (lvlConfig.delta) {
-      if (lvlConfig.delta.length) {
-        this.currentSettings.levelTime += lvlConfig.delta.length;
-      }
-    }
+    gamConfig = this.APP_CONFIG.game.levels[this.lvlIndex];
 
     // Build the initial level pattern configuration for each enemy row.  See
     // this.APP_CONFIG.enemy.reset for entry property descriptions.
@@ -1474,6 +1622,7 @@
     for (row = 0; row < this.APP_CONFIG.enemy.maxSprites.length; row += 1) {
       // Fill in an initial dummy pattern that will be immediately updated with
       // the first actual pattern from lvlConfig.rows
+      // NOTE: Could instead simplify enemy.reset, and use deepCopyOf(enemy.reset)
       this.currentPatterns.push(Object.create(null, this.APP_CONFIG.enemy.reset));
       // Get all sprites stopped and positioned so that the first update will
       // start the first pattern for the level
@@ -1486,7 +1635,28 @@
       // Move the first sprite for each row to just after the canvas
       // NOTE: speed is always zero here, so no difference for negative speed
       this.enemySprites[row][0].position.x = this.limits.offRightX;
-    }
+    }// ./for (row = 0; row < this.APP_CONFIG.enemy.maxSprites.length; row += 1)
+
+    // Adjust the (game) settings to use for the current level
+    if (gamConfig !== undefined) {
+      // gamConfig might be undefined.  Only need entry if storing changes for
+      // the current level.
+      if (gamConfig.length) {
+        this.currentSettings.levelTime = gamConfig.length;
+      }
+      if (gamConfig.delta) {
+        if (gamConfig.delta.length) {
+          this.currentSettings.levelTime += gamConfig.delta.length;
+        }
+      }
+      if (gamConfig.goal) {
+        // Just replace the whole array.  There does not seem to be a good (and
+        // simple) structure to add/remove/update portions.  Keeping it optional
+        // though means no entry is needed if no change from previous level
+        delete this.currentSettings.goal;
+        this.currentSettings.goal = gamConfig.goal;
+      }
+    }// ./if (gamConfig !== undefined)
 
     // Move the player avatar back to the starting location
     this.player.col = this.APP_CONFIG.player.start.col;
@@ -1767,6 +1937,48 @@
   };// ./function Frogger.prototype.refreshEnemyQueues()
 
   /**
+   * Check for player avatar collisions with anything that is going to change
+   * game state
+
+   * @return {boolean}    Was state changing collision detected?
+   */
+  Frogger.prototype.collisionCheck = function () {
+    var goal, goals;
+    /* None of the collision detection needs to worry about the y coordinate in
+     * more detail that the grid row.  None of the game features can be placed
+     * (vertically) outside a row.  At least as far as collision detection is
+     * concerned.  Offsets are used for visual adjustments, but do not affect
+     * the location for vertical position. */
+
+    // check for collision with 'prize' sprites
+    /* Check for prize collection first, so can collect when it is sitting past
+       the goal line. */
+    //TODO: if (this.player.row <= this.APP_CONFIG.game.start.row)
+    // This does NOT change game state, so do not return anything yet
+
+    // check for collision with 'goal' check for success before check for fail
+    goals = this.currentSettings.goal;
+    for (goal = 0; goal < goals.length; goal += 1) {
+      if (this.player.row === goals[goal].row &&
+          arrayContains.call(goals[goal].cols, this.player.col)
+          ) {
+        this.state = STATE_ENUM.donelevel;
+        return true;
+      }
+    }
+
+    // check for collision with game field boundaries
+    /* *CURRENTLY avatar only moves in gird cell size steps.  That could change
+       if implement things like riding on logs. */
+    // TODO:
+
+    // check for collision with enemy sprite (current avatar row only)
+    // TODO:
+
+    return false;
+  };// ./Frogger.prototype.collisionCheck()
+
+  /**
    * Game state processing to do (at the start of) each animation frame
    *
    * NOTE: conceptually done at 'pre-update'
@@ -1777,15 +1989,25 @@
   Frogger.prototype.next = function (deltaTime) {
     manageTime.call(this, deltaTime);
 
-    // Check for level time limit exceeded first
+    // check for collisions first, so it is possible to finish a level just as
+    // the time is running out.
+    if (this.state === STATE_ENUM.running) {
+      this.collisionCheck();
+      // TODO:? Any extra processing needed here?  collisionCheck() returns true
+      // when state was changed: processing done by the state change code, and
+      // that SHOULD leave things ready to continue normally here.
+    }
+
+    // Check for level time limit exceeded
     if (this.elapsedTimes.level > this.currentSettings.levelTime) {
       // Time has expired for the current level.  Avatar dies (from exposure)
       this.reason = 'from exposure @' + this.elapsedTimes.level + ' on level ' +
           this.level + ', with limit of ' + this.currentSettings.levelTime;
       this.state = STATE_ENUM.dieing;
+      return;
+      // No point in adjusting patterns or enemies while dieing.  They are going
+      // to get reset right away anyway.
     }
-
-    // TODO: check for collisions next ???
 
     // Check for expired patterns
     this.cycleEnemyPatterns();
