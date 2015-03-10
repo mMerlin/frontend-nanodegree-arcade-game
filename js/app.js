@@ -38,7 +38,7 @@
 // need to wait.
 (function () {
   'use strict';
-  var Sprite, STATE_ENUM, froggerInstance, app, engineNs;
+  var Sprite, ENUMS, froggerInstance, app, engineNs;
 
   /**
    * Create a nested set of objects, (only) if any level(s) do not already exist
@@ -643,8 +643,6 @@
       // not being processed.
       this.pendingCommand = null;
     }// ./if (this.pendingCommand)
-    //TODO: add limit checks for edge of field: die
-    // might be 'automatic', based on collision logic?
   };// ./function Avatar.prototype.update()
 
   /**
@@ -682,20 +680,69 @@
   // not really belong in the prototypes.  Using function closure scope instead.
 
   // Internal constants
-  STATE_ENUM = {
-    "waiting" : "waiting",
-    "dieing" : "Avatar dieing",
-    "donelevel" : "scored goal",
-    "resurrect" : "resurrect",
-    "newlevel" : "new level",
-    "running" : "running"
+  ENUMS = {
+    "STATE" : {
+      "waiting" : "waiting",
+      "dieing" : "Avatar dieing",
+      "donelevel" : "scored goal",
+      "gameover" : "game over",
+      "resurrect" : "resurrect",
+      "newlevel" : "new level",
+      "running" : "running"
+    },
+    "CHANGE" : {
+      "never" : "Never",
+      "now" : "Now",
+      "trigger" : "Trigger",
+      "elapsed" : "Elapsed"
+    },
+    "TRANSITIONS" : {}
   };
+  // Lookup for valid state transitions: target from (one of) current)
+  // Can not populate direction in the JSON structure, since it uses constants
+  // from earlier in the structure.
+  ENUMS.TRANSITIONS[ENUMS.STATE.waiting] = [ENUMS.STATE.newlevel];
+  ENUMS.TRANSITIONS[ENUMS.STATE.dieing] = [ENUMS.STATE.running];
+  ENUMS.TRANSITIONS[ENUMS.STATE.donelevel] = [ENUMS.STATE.running];
+  ENUMS.TRANSITIONS[ENUMS.STATE.gameover] = [undefined, ENUMS.STATE.dieing];
+  ENUMS.TRANSITIONS[ENUMS.STATE.resurrect] = [ENUMS.STATE.dieing];
+  ENUMS.TRANSITIONS[ENUMS.STATE.newlevel] =
+    [ENUMS.STATE.donelevel, ENUMS.STATE.gameover];
+  ENUMS.TRANSITIONS[ENUMS.STATE.running] = [ENUMS.STATE.waiting];
 
   /**
-   * Get the 1 based level number to use when showing it to the user
+   * Check if the requested target is a valid transition from current state
    *
-   * @return {Integer}
+   * This is to be run in the context ('this') of the finite state settings
+   * object.
+   *
+   * Clears any pending state transition that is satisfied by the (validated)
+   * state change.
+   *
+   * @param {string} targetState The requested transition target state
+   * @return {boolean}
    */
+  function validateStateTransition(targetState) {
+    var transitions;
+    if (!ENUMS.TRANSITIONS.hasOwnProperty(targetState)) {
+      throw new Error('Unknown target state: "' + targetState + '"');
+    }
+
+    transitions = ENUMS.TRANSITIONS[targetState];
+    if (!arrayContains.call(transitions, this.current)) {
+      return false;
+    }
+
+    // If the requested transition is valid, and matches the pending
+    // transition target, clear it out of pending.
+    if (this.next === targetState) {
+      this.changeOn = ENUMS.CHANGE.never;
+      this.next = null;
+    }
+
+    return true;
+  }// ./function validateStateTransition(targetState)
+
   function getLevel() {
     return this.lvlIndex + 1;
   }// ./function getLevel()
@@ -708,7 +755,7 @@
    * @return {string}
    */
   function getState() {
-    return this.private.state;
+    return this.finiteState.current;
   }// ./function getState()
 
   /**
@@ -716,44 +763,76 @@
    *
    * Frogger class state property setter function
    *
-   * @param {string} newState   The destination state from STATE_ENUM
+   * @param {string} newState   The destination state from ENUMS.STATE
    * @return {string}
    */
   function setState(newState) {
-    var prevState, tmpMsg, tm;
+    var lockStatus, tmpMsg, tm;
+    lockStatus = this.finiteState.lock;
+    this.finiteState.lock = true;
     console.log((new Date()).toISOString() + ' changing state: "' +
-      this.private.state + '" ==> "' + newState + '"'
+      this.finiteState.current + '" ==> "' + newState + '"'
       );
-    prevState = this.private.state;// if any logic needs to know the state path
-    this.private.state = newState;//TODO: add validation before setting?
-    this.elapsedTimes.state = 0;
+
+    if (lockStatus) {
+      // This function is not recursive / re-entrant safe.  Make sure that only
+      // a single instance will ever be in progress.  Set '.next' property to
+      // change the state again after finished setup for the current transition.
+      throw new Error('New state transition to "' +
+        newState + '" while still processing previous transition');
+    }
+
+    // Check that the requested state transition (path) is valid
+    if (!validateStateTransition.call(this.finiteState, newState)) {
+      this.finiteState.lock = false;
+      throw new Error('Invalid transition from "' +
+        this.finiteState.current + '" to "' + newState + '" state');
+      //return null;// reject the state transition
+    }
+
+    // Process the requested 'transition to' state
     switch (newState) {
-    case STATE_ENUM.waiting:
-      this.elapsedTimes.level = 0.0001;// Enough to trigger initial pattern change
+    case ENUMS.STATE.gameover:
+      // Game over from dieing, or undefined (initial state)
+      // TODO: stub, nothing to do when current === undefined
+      // start game over scrolling message
       break;
-    case STATE_ENUM.running:
+    case ENUMS.STATE.waiting:
+      this.elapsedTimes.level = 0.0001;// Enough to trigger initial pattern change
+      this.finiteState.next = ENUMS.STATE.running;
+      this.finiteState.changeOn = ENUMS.CHANGE.trigger;
+      break;
+    case ENUMS.STATE.running:
       this.tracker.scrollMessage = false;
       this.player.sleeping = false;
       break;
-    case STATE_ENUM.newlevel:
+    case ENUMS.STATE.newlevel:
       this.lvlIndex += 1;
       // TODO: handle (better) if this.lvlIndex >= max configured levels
       if (this.lvlIndex >= this.APP_CONFIG.enemy.levels.length) {
+        console.log((new Date()).toISOString() + ' Throwing game broken');
+        this.finiteState.lock = false;
         throw new Error('Game broken, no level ' + this.level + ' configuration');
       }
 
       // Set timeout value (for the state), then switch to running?
-      this.state = STATE_ENUM.waiting;
+      // TODO: setup counter to force delay before (eventually) getting to
+      // running state, to allow the sprites to 'fill' each of the rows.  This
+      // is less than the (slowest) time to traverse a complete row by the
+      // final (pattern) separation distance (divided by speed)
+      // each row: canvas (width / speed) - (distance[-1] / speed)
+      this.finiteState.next = ENUMS.STATE.waiting;
+      this.finiteState.changeOn = ENUMS.CHANGE.now;
+      this.finiteState.doCurrent = true;
       break;
-    case STATE_ENUM.dieing:
-      this.player.die(this.reason);
+    case ENUMS.STATE.dieing:
       this.elapsedTimes.level = 0;
-      //this.finiteState.next = STATE_ENUM.resurrect;
-      //this.finiteState.delay = 5;//seconds for death throes
-      // = this.APP_CONFIG. ? .displayDeath;
+      this.finiteState.next = ENUMS.STATE.resurrect;
+      this.finiteState.delay = 5;//seconds for death throes
+      this.changeOn = ENUMS.CHANGE.elapsed;
+      this.finiteState.doCurrent = true;
       break;
-    case STATE_ENUM.donelevel:
-      this.player.sleeping = true;
+    case ENUMS.STATE.donelevel:
       tm = this.currentSettings.levelTime - this.elapsedTimes.level;
       tmpMsg = deepCopyOf(this.APP_CONFIG.hud.statusline.templates.levelComplete);
       // TODO: utility textInterpolate(array)
@@ -763,37 +842,46 @@
         replace('{1}', this.level).
         replace('{2}', Number(tm).toFixed(1));
       this.tracker.message = tmpMsg;
-      //this.finiteState.next = STATE_ENUM.newlevel;
-      // tie state change to scrolling message completing
-      // TODO: (or being aborted by user: SPACE command)
-      //HPD
+      this.finiteState.next = ENUMS.STATE.newlevel;
+      this.finiteState.changeOn = ENUMS.CHANGE.trigger;
+      // TODO: handle scroll message truncate by user: SPACE command)
       break;
-    case STATE_ENUM.resurrect:
-      this.player.resurrect();
+    case ENUMS.STATE.resurrect:
       this.lives -= 1;
       if (this.lives <= 0) {
+        this.finiteState.lock = false;
         throw new Error('Not Implemented: game over');
       }
       // - space to start message ? game over? start game over in above
-      this.state = STATE_ENUM.waiting;
+      this.finiteState.next = ENUMS.STATE.waiting;
+      this.finiteState.changeOn = ENUMS.CHANGE.now;
+      this.finiteState.doCurrent = true;
       break;
-    // case STATE_ENUM.otherRecognized:
-    //   states that do not need any extra processing
-    //   .paused ?
-    //   break;
     default:
       throw new Error('Unknown target state: ' + newState +
-        '; from state = "' + prevState + '"'
+        '; from state = "' + this.finiteState.current + '"'
         );
       // break;
-    }
-    if (prevState === STATE_ENUM.running) {
+    }// ./switch (newState)
+
+    // If got this far, the state transition was accepted.  Do any cleanup
+    // processing needed for the current (now previous) state.
+    switch (this.finiteState.current) {
+    case ENUMS.STATE.running:
+      // State changing away from running, put the player to sleep
       this.player.sleeping = true;
-    }
+      break;
+    }// ./switch (this.finiteState.current)
+
     console.log((new Date()).toISOString() + ' changed state: "' +
-      prevState + '" ==> "' + this.private.state + '"'
+      this.finiteState.current + '" ==> "' + newState + '"'
       );
-    return this.private.state;
+    //this.finiteState.previous = this.finiteState.current;
+    this.finiteState.current = newState;
+    this.elapsedTimes.state = 0;
+    this.finiteState.lock = false;
+
+    return this.finiteState.current;
   }// ./function setState(newState)
 
   /**
@@ -807,7 +895,7 @@
     // most states, but will never conflict.  Anywhere it WOULD conflict gets
     // its own separate property in this.elapsedTimes
     this.elapsedTimes.state += deltaTime;
-    if (this.state === STATE_ENUM.running) {
+    if (this.state === ENUMS.STATE.running) {
       // Only increase the elapsed level time when the application is running
       this.elapsedTimes.level += deltaTime;
     }
@@ -857,6 +945,7 @@
   function Frogger() {
     var that;
     this.private = {};// (psuedo) private storage for class instances
+    console.log((new Date()).toISOString() + ' got to Frogger constructor');
 
     // Reasonably robust singleton class pattern implementation
     if (froggerInstance) {
@@ -925,8 +1014,8 @@
           this.position.x = this.context.canvas.width;
           this.scrollEnd = this.position.x;
           if (this.message.changestate) {
-            throw new Error('Not Implemented: next finitestate');
-            // TODO: this.finitestate.next
+            this.message.changestate = false;
+            that.finiteState.changeOn = ENUMS.CHANGE.now;
           }
         } else {
           this.position.x += this.message.speed * deltaTime;
@@ -1182,7 +1271,7 @@
      *                        one off canvas (queued).  (Manually) calculated
      *                        from: (minimum number of distance values where the
      *                        sum > canvas width - one sprite width) +1
-     *   topRow {Integer}     The first gird row (zero based) that enemies can
+     *   topRow {Integer}     The first grid row (zero based) that enemies can
      *                        travel on.
      *   levels {Array}       One {Object} entry per game level
      *                    ??  need a way to continue past configured levels ??
@@ -1302,6 +1391,34 @@
                   "startDistance" : 0,
                   "speed" : 40,
                   "distances" : [2.8, 2.8, 2.8, 5.6]
+                }
+              ]
+            ]
+          },
+          {
+            "rows" : [
+              [
+                {
+                  "seconds" : 60,
+                  "startDistance" : 0,
+                  "speed" : 80,
+                  "distances" : [1, 6, 6]
+                }
+              ],
+              [
+                {
+                  "seconds" : 60,
+                  "startDistance" : 0,
+                  "speed" : -50,
+                  "distances" : [-3.5, -3.5, -3.5, -6.8]
+                }
+              ],
+              [
+                {
+                  "seconds" : 60,
+                  "startDistance" : 0,
+                  "speed" : 50,
+                  "distances" : [3.5]
                 }
               ]
             ]
@@ -1444,7 +1561,6 @@
       get : getState
     });
 
-    this.lvlIndex = -1; //So first init will get to level 0
     this.score = 0;
     this.lives = this.APP_CONFIG.player.start.lives;
     this.currentSettings = {
@@ -1452,8 +1568,16 @@
     };
     this.limits = {};
     this.elapsedTimes = {};
+    console.log((new Date()).toISOString() + ' initializing Frogger instance');
+    // Setup to go to level 1 (index 0) when the engine is ready
+    this.lvlIndex = -1; //So first init will get to level 0
+    this.finiteState = {
+      "next" : null,
+      "timeout" : 0,
+      "changeOn" : "none"
+    };
+    this.state = ENUMS.STATE.gameover;
     this.tracker = new PaceCar();
-    this.state = STATE_ENUM.waiting;
 
     // add dummy tracker enemy object to the start of the list.  Use to:
     // - check for collisions
@@ -1579,8 +1703,10 @@
     case 'space':
       // Ignore the request unless currently waiting
       // TODO: other cases to not ignore? abort 'dieing' animation?
-      if (this.state === STATE_ENUM.waiting) {
-        this.state = STATE_ENUM.running;
+      if (this.state === ENUMS.STATE.waiting) {
+        if (this.finiteState.changeOn === ENUMS.CHANGE.trigger) {
+          this.finiteState.changeOn = ENUMS.CHANGE.now;
+        }
       }
       break;
     }
@@ -1596,7 +1722,6 @@
   Frogger.prototype.initLevel = function () {
     var gamConfig, row, sprite;
     console.log((new Date()).toISOString() + ' reached Frogger.initLevel');
-    this.state = STATE_ENUM.newlevel;
 
     gamConfig = this.APP_CONFIG.game.levels[this.lvlIndex];
 
@@ -1713,9 +1838,6 @@
     // Start the 'press space' message scrolling
     this.tracker.message = this.APP_CONFIG.hud.statusline.templates.start;
 
-    // Setup the game state for the current (first = 0) level
-    this.initLevel();
-
     // TODO: more
     // How to (cleanly) get the first pattern started?
     // - 'jump' to position(s) on canvas?
@@ -1787,6 +1909,11 @@
       // closure scope 'that'
       that.handleCommand(e.detail);
     });
+
+    // Setup the game state for the current (first = 0) level
+    this.finiteState.next = ENUMS.STATE.newlevel;
+    this.finiteState.changeOn = ENUMS.CHANGE.now;
+    console.log((new Date()).toISOString() + ' end Frogger.start');
   };// ./function Frogger.prototype.start(cvsContext)
 
   /**
@@ -1851,7 +1978,7 @@
     for (row = 0; row < this.currentPatterns.length; row += 1) {
       rowState = this.currentPatterns[row];
       // hpd idea: include/use rowState.expired boolean, set by .next? (when
-      // app.state changes to 'waiting', AND currently patternIdx = -1 ?)
+      // this.state changes to 'waiting', AND currently patternIdx = -1 ?)
       if (this.elapsedTimes.level >= rowState.expires) {
         rowConfig = lvlConfig.rows[row];
         console.log('End pattern @' + rowState.expires + ' for level ' +
@@ -1950,21 +2077,56 @@
       if (this.player.row === goals[goal].row &&
           arrayContains.call(goals[goal].cols, this.player.col)
           ) {
-        this.state = STATE_ENUM.donelevel;
+        this.state = ENUMS.STATE.donelevel;
         return true;
       }
     }
 
     // check for collision with game field boundaries
-    /* *CURRENTLY avatar only moves in gird cell size steps.  That could change
+    /* *CURRENTLY* avatar only moves in grid cell size steps.  That could change
        if implement things like riding on logs. */
-    // TODO:
+    // The whole playing field is valid (although some if it will be caught by
+    // the previous 'goal line' check).
+    if (this.player.row < 0 ||
+        this.player.row >= this.GAME_BOARD.canvas.gridRows ||
+        this.player.col < 0 ||
+        this.player.col >= this.GAME_BOARD.canvas.gridCols
+        ) {
+      this.reason = 'from falling off the world';
+      this.state = ENUMS.STATE.dieing;
+      return true;
+    }// ./if (player outside canvas)
 
     // check for collision with enemy sprite (current avatar row only)
     // TODO:
 
     return false;
   };// ./Frogger.prototype.collisionCheck()
+
+  /**
+   * Do any processing need to 'start' the current state.
+   *
+   * This runs state initialization code after a state transition, to keep the
+   * actual processing outside of the non re-entrant safe transitioning logic.
+   *
+   * @return {undefined}
+   */
+  Frogger.prototype.startState = function () {
+    if (!this.finiteState.doCurrent) { return; }
+
+    this.finiteState.doCurrent = false;
+    switch (this.state) {
+    case ENUMS.STATE.newlevel:
+      this.initLevel();
+      break;
+    case ENUMS.STATE.dieing:
+      this.player.die(this.reason);
+      break;
+    case ENUMS.STATE.resurrect:
+      this.player.resurrect();
+      break;
+    }// ./switch (this.state)
+  };// ./Frogger.prototype.startState()
 
   /**
    * Game state processing to do (at the start of) each animation frame
@@ -1977,9 +2139,20 @@
   Frogger.prototype.next = function (deltaTime) {
     manageTime.call(this, deltaTime);
 
-    // check for collisions first, so it is possible to finish a level just as
-    // the time is running out.
-    if (this.state === STATE_ENUM.running) {
+    // Do any needed state initialization
+    this.startState();
+    // Check if there are any pending state transitions.  Loop to potentially
+    // process multiple (cascading) transitions.
+    while (this.finiteState.next &&
+        this.finiteState.changeOn === ENUMS.CHANGE.now
+        ) {
+      this.state = this.finiteState.next;
+      this.startState();
+    }
+
+    // check for collisions before time limits, so it is possible to finish a
+    // level just as the time is running out.
+    if (this.state === ENUMS.STATE.running) {
       this.collisionCheck();
       // TODO:? Any extra processing needed here?  collisionCheck() returns true
       // when state was changed: processing done by the state change code, and
@@ -1991,7 +2164,7 @@
       // Time has expired for the current level.  Avatar dies (from exposure)
       this.reason = 'from exposure @' + this.elapsedTimes.level + ' on level ' +
           this.level + ', with limit of ' + this.currentSettings.levelTime;
-      this.state = STATE_ENUM.dieing;
+      this.state = ENUMS.STATE.dieing;
       return;
       // No point in adjusting patterns or enemies while dieing.  They are going
       // to get reset right away anyway.
