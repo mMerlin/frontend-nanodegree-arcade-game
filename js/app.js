@@ -102,6 +102,46 @@
   }// ./function arrayContains(obj)
 
   /**
+   * Replace "{n}" markers in text string with consecutive values from array
+   *
+   * This must be run in the ('this') context of the template string.
+   *
+   * Array entries with no matching marker are simply ignored.
+   *
+   * If duplicate markers exists, only the first will be replaced.
+   *
+   * NOTE: Markers start at {1}, but index starts at 0.
+   *
+   * NOTE: There is a simple iterative solution, but the recursive solution
+   * looks clean, and 'might' reduce temporary string copying.
+   *
+   * This does the substitutions in descending sequence, which can be important
+   * if the substituted values introduce additional markers.
+   *
+   * @param {Array} ary        Array of values to insert into string
+   * @returns {string}
+   */
+  function textInterpolate(ary, lastKey) {
+    var idx, key;
+    key = lastKey || ary.length;//Works, since never reaches key 0 falsey value
+    idx = key - 1;
+    if (idx <= 0) { return this.replace('{1}', ary[0]); }
+    return textInterpolate.
+      call(this.replace('{' + key + '}', ary[idx]), ary, idx);
+  }// ./function textInterpolate(ary, lastKey)
+  // This iterative version processes the substitutions in ascending marker
+  // sequence.
+  // function textInterpolate(ary) {
+  //   var i, result = this;
+  //   console.log('Make it to textInterpolate');
+  //   console.log(typeof this);
+  //   for (i = 0; i < ary.length; i += 1) {
+  //     result = result.replace('{' + (i + 1) + '}', ary[i]);
+  //   }
+  //   return result;
+  // }// ./function textInterpolate(ary)
+
+  /**
    * Create a deep copy of the passed argument.
    *
    * Enumerable properties are duplicated, prototypes are copied.
@@ -113,6 +153,11 @@
    *
    * NOTE: Memory says that some browsers (versions?) show 'object' for
    * typeof function, but I found no references.
+   *
+   * NOTE: This has not been tested with either arrays or regex objects.  Arrays
+   * are being explicitly checked for, but that code block has not been verified.
+   * Regex is documented as being detected as an object, but it is not known
+   * whether standard object processing will properly clone it.
    *
    * @param {object} obj        The object to (deep) copy
    * @returns {object}
@@ -126,8 +171,8 @@
 
     // Now for the 'hard' part.  Building a copy of an object.
 
-    // TODO: Array processing not tested
     if (obj instanceof Array) {
+      // untested array processing code here
       copiedObj = Object.create(obj.constructor.prototype);
       // copiedObj = [];
       // copiedObj.prototype = Object.create(obj.prototype);
@@ -138,8 +183,7 @@
       return copiedObj;
     }// ./ if (obj instanceof Array)
 
-    // TODO: This may need extra detection/handling for regex, which shows type
-    // object
+    // Unknown if this code will work for a regex object.
     copiedObj = Object.create(obj.constructor.prototype);
     for (k in obj) {
       if (obj.hasOwnProperty(k)) {
@@ -296,8 +340,19 @@
    * @return {undefined}
    */
   Sprite.prototype.render = function () {
-    // TODO: skip (just return) if completely outside of the visible
-    // canvas area
+    // Skip rendering if completely outside of the visible canvas area.
+    // Expectation is that draw is expensive compared to detection
+    // tst1 = 0 - this.cell.width;// jslint: Unexpected 'this'
+    // tst1 = this.cell.width;// jslint: OK
+    // if (this.position.x < (0 - this.cell.width)) {// jslint: Unexpected 'this'
+    // if (this.position.x < tst1) {// OK
+    // if (this.position.x < -this.cell.width) {// OK
+    if ((this.position.x <= -this.cell.width) ||
+        this.position.x >= this.context.canvas.width
+        ) {
+        // Off canvas horizontally
+      return;
+    }
     // Handle reversing the coordinate system, to display the graphic image
     // flipped horizontally
     if (this.position.flipped) {
@@ -551,6 +606,11 @@
     this.colOffset = ofstHoriz;
     this.col = gridCol;
     this.sleeping = true;// Avatar does not respond to commands while sleeping
+    // Create (reusable) custom event instance.
+    this.appEvent = makeCustomEvent("ApplicationCommand", {
+      message : "Application Event received",
+      command : null
+    });
   }// ./function Avatar(imgRsrc, gridRow, gridCol, ofstVert, ofstHoriz,
   //      cvsContext, gridCell)
   Avatar.prototype = Object.create(Enemy.prototype);
@@ -563,19 +623,15 @@
    * @return {undefined}
    */
   Avatar.prototype.handleInput = function (cmd) {
-    // var i;//DEBUG
     // Save the command until ready to update for the next animation frame.
     // Commands are NOT queued.  If multiple commands arrive in the same frame,
     // only the last one will get processed.
-    this.pendingCommand = cmd;
-    console.log((new Date()).toISOString() +
-      ' reached handleInput: cmd = "' + cmd + '".'
-      );
-    // DEBUG loop
-    // console.log('bugs');
-    // for (i = 0; i < engineNs.allEnemies.length; i += 1) {
-    //   console.log(engineNs.allEnemies[i].position.x);
-    // }
+    this.pendingCommand = cmd;// 'undefined' tests as 'falsey'
+    if (!cmd) {
+      console.log((new Date()).toISOString() +
+        ' unprocessable "' + cmd + '" command received by handleInput'
+        );
+    }
   };// ./function Avatar.prototype.handleInput(cmd)
 
   /**
@@ -589,7 +645,6 @@
    * @return {undefined}
    */
   Avatar.prototype.update = function () {
-    var appEvent;
     // Process any pending (movement) command, passing anything else to the
     // application.
     if (this.pendingCommand) {
@@ -597,50 +652,38 @@
         ' reached update; pending command: cmd = "' + this.pendingCommand +
         '".'
         );
-      switch (this.pendingCommand) {
-      case 'left':
-        if (!this.sleeping) {
+      this.appEvent.detail.command = this.pendingCommand;
+      if (this.sleeping) {
+        //Pass ALL commands to the main application
+        document.dispatchEvent(this.appEvent);
+      } else {// !(this.sleeping)
+        switch (this.pendingCommand) {
+        case 'left':
           this.col -= 1;
-        }
-        break;
-      case 'right':
-        if (!this.sleeping) {
+          break;
+        case 'right':
           this.col += 1;
-        }
-        break;
-      case 'up':
-        if (!this.sleeping) {
+          break;
+        case 'up':
           this.row -= 1;
-        }
-        break;
-      case 'down':
-        if (!this.sleeping) {
+          break;
+        case 'down':
           this.row += 1;
-        }
-        break;
-      default:
-        // Just pass the command along to the main application.  *We* do not need
-        // to know anything about it.
-        console.log((new Date()).toISOString() +
-          ' update passing pending command: cmd = "' + this.pendingCommand +
-          '" to application'
-          );
-        appEvent = makeCustomEvent("ApplicationCommand", {
-          message : "Application Event received",
-          command : this.pendingCommand
-        });
-        document.dispatchEvent(appEvent);
-        break;
-      }// ./switch (this.pendingCommand)
-
-      if (!this.sleeping) {// debug
+          break;
+        default:
+          // Just pass the command along to the main application.  *We* do not
+          // need to know anything about it here.
+          document.dispatchEvent(this.appEvent);
+          break;
+        }// ./switch (this.pendingCommand)
         console.log((new Date()).toISOString() +
           ' pending command: cmd = "' + this.pendingCommand +
           '" processed in update'
           );
-      }
-      // Always clear any pending command.  Commands not queued while they are
-      // not being processed.
+      }// ./else !(this.sleeping)
+
+      // Always clear any pending command.  Commands are not queued while they
+      // are not being processed.
       this.pendingCommand = null;
     }// ./if (this.pendingCommand)
   };// ./function Avatar.prototype.update()
@@ -655,7 +698,7 @@
     // Save any internal state before changing to show the death throes
     // change icon? animate? spin and shrink?
     // ?? just hide the avatar, and use another sprite for that ??
-    this.livingSprite = this.sprite;
+    // this.livingSprite = this.sprite;
     console.log('Avatar died ' + cause);
   };// ./function Avatar.prototype.die(cause)
 
@@ -667,7 +710,7 @@
   Avatar.prototype.resurrect = function () {
     // TODO: stub
     // restore any (internal) changes made to show the death throes
-    this.sprite = this.livingSprite;
+    // this.sprite = this.livingSprite;
     console.log('Avatar resurrected');
   };// ./function Avatar.prototype.resurrect()
 
@@ -701,14 +744,29 @@
   // Lookup for valid state transitions: target from (one of) current)
   // Can not populate direction in the JSON structure, since it uses constants
   // from earlier in the structure.
-  ENUMS.TRANSITIONS[ENUMS.STATE.waiting] = [ENUMS.STATE.newlevel];
-  ENUMS.TRANSITIONS[ENUMS.STATE.dieing] = [ENUMS.STATE.running];
-  ENUMS.TRANSITIONS[ENUMS.STATE.donelevel] = [ENUMS.STATE.running];
-  ENUMS.TRANSITIONS[ENUMS.STATE.gameover] = [undefined, ENUMS.STATE.dieing];
-  ENUMS.TRANSITIONS[ENUMS.STATE.resurrect] = [ENUMS.STATE.dieing];
-  ENUMS.TRANSITIONS[ENUMS.STATE.newlevel] =
-    [ENUMS.STATE.donelevel, ENUMS.STATE.gameover];
-  ENUMS.TRANSITIONS[ENUMS.STATE.running] = [ENUMS.STATE.waiting];
+  ENUMS.TRANSITIONS[ENUMS.STATE.waiting] = [
+    ENUMS.STATE.newlevel,
+    ENUMS.STATE.resurrect
+  ];
+  ENUMS.TRANSITIONS[ENUMS.STATE.dieing] = [
+    ENUMS.STATE.running
+  ];
+  ENUMS.TRANSITIONS[ENUMS.STATE.donelevel] = [
+    ENUMS.STATE.running
+  ];
+  ENUMS.TRANSITIONS[ENUMS.STATE.gameover] = [
+    ENUMS.STATE.resurrect
+  ];
+  ENUMS.TRANSITIONS[ENUMS.STATE.resurrect] = [
+    ENUMS.STATE.dieing
+  ];
+  ENUMS.TRANSITIONS[ENUMS.STATE.newlevel] = [
+    ENUMS.STATE.donelevel,
+    ENUMS.STATE.gameover
+  ];
+  ENUMS.TRANSITIONS[ENUMS.STATE.running] = [
+    ENUMS.STATE.waiting
+  ];
 
   /**
    * Check if the requested target is a valid transition from current state
@@ -792,22 +850,28 @@
 
     // Process the requested 'transition to' state
     switch (newState) {
-    case ENUMS.STATE.gameover:
-      // Game over from dieing, or undefined (initial state)
-      // TODO: stub, nothing to do when current === undefined
-      // start game over scrolling message
-      break;
     case ENUMS.STATE.waiting:
       this.elapsedTimes.level = 0.0001;// Enough to trigger initial pattern change
       this.finiteState.next = ENUMS.STATE.running;
       this.finiteState.changeOn = ENUMS.CHANGE.trigger;
       break;
+
     case ENUMS.STATE.running:
       this.tracker.scrollMessage = false;
       this.player.sleeping = false;
       break;
+
     case ENUMS.STATE.newlevel:
+      if (this.resetGame) {
+        this.lvlIndex = -1; //So increment will get to level 0 (displayed as 1)
+      }
       this.lvlIndex += 1;
+      this.elapsedTimes.level = 0;
+      if (this.lvlIndex === 0) {
+        // Start of (new) game
+        this.lives = this.APP_CONFIG.player.start.lives;
+        this.score = 0;
+      }
       // TODO: handle (better) if this.lvlIndex >= max configured levels
       if (this.lvlIndex >= this.APP_CONFIG.enemy.levels.length) {
         console.log((new Date()).toISOString() + ' Throwing game broken');
@@ -825,38 +889,52 @@
       this.finiteState.changeOn = ENUMS.CHANGE.now;
       this.finiteState.doCurrent = true;
       break;
+
     case ENUMS.STATE.dieing:
-      this.elapsedTimes.level = 0;
+      tmpMsg = deepCopyOf(this.APP_CONFIG.hud.statusline.templates.died);
+      tmpMsg.text = tmpMsg.text.
+        replace('{1}', this.reason);
+      this.tracker.message = tmpMsg;
+
       this.finiteState.next = ENUMS.STATE.resurrect;
-      this.finiteState.delay = 5;//seconds for death throes
-      this.changeOn = ENUMS.CHANGE.elapsed;
+      // this.finiteState.delay = 5;//seconds for death throes
+      // this.changeOn = ENUMS.CHANGE.elapsed;
+      this.finiteState.changeOn = ENUMS.CHANGE.trigger;
       this.finiteState.doCurrent = true;
+      // NOTE: this.player.die() is currently just a stub
+
       break;
+
     case ENUMS.STATE.donelevel:
       tm = this.currentSettings.levelTime - this.elapsedTimes.level;
       tmpMsg = deepCopyOf(this.APP_CONFIG.hud.statusline.templates.levelComplete);
-      // TODO: utility textInterpolate(array)
-      // tmpMsg.text = textInterpolate.call(tmpMsg.text,
-      //   [this.level, Number(tm.toFixed(1))]);
-      tmpMsg.text = tmpMsg.text.
-        replace('{1}', this.level).
-        replace('{2}', Number(tm).toFixed(1));
+      tmpMsg.text = textInterpolate.call(tmpMsg.text,
+        [this.level, Number(tm.toFixed(1))]);
       this.tracker.message = tmpMsg;
       this.finiteState.next = ENUMS.STATE.newlevel;
       this.finiteState.changeOn = ENUMS.CHANGE.trigger;
-      // TODO: handle scroll message truncate by user: SPACE command)
       break;
+
     case ENUMS.STATE.resurrect:
       this.lives -= 1;
-      if (this.lives <= 0) {
-        this.finiteState.lock = false;
-        throw new Error('Not Implemented: game over');
-      }
       // - space to start message ? game over? start game over in above
-      this.finiteState.next = ENUMS.STATE.waiting;
+      if (this.lives <= 0) {
+        this.finiteState.next = ENUMS.STATE.gameover;
+      } else {
+        this.finiteState.next = ENUMS.STATE.waiting;
+        this.finiteState.doCurrent = true;
+      }
       this.finiteState.changeOn = ENUMS.CHANGE.now;
-      this.finiteState.doCurrent = true;
       break;
+
+    case ENUMS.STATE.gameover:
+      // Game over from dieing too many times
+      this.resetGame = true;
+      this.tracker.message = this.APP_CONFIG.hud.statusline.templates.gameover;
+      this.finiteState.next = ENUMS.STATE.newlevel;
+      this.finiteState.changeOn = ENUMS.CHANGE.trigger;
+      break;
+
     default:
       throw new Error('Unknown target state: ' + newState +
         '; from state = "' + this.finiteState.current + '"'
@@ -945,7 +1023,7 @@
   function Frogger() {
     var that;
     this.private = {};// (psuedo) private storage for class instances
-    console.log((new Date()).toISOString() + ' got to Frogger constructor');
+    console.log((new Date()).toISOString() + ' reached Frogger constructor');
 
     // Reasonably robust singleton class pattern implementation
     if (froggerInstance) {
@@ -969,7 +1047,6 @@
      * functions should ever be created.
      */
 
-    // TODO: Verify logic: inner class
     /**
      * Tracking sprite: allow application to interface with animation engine
      *
@@ -1249,7 +1326,19 @@
         },
         "resourceTiles" : [
           "images/enemy-bug.png",
-          "images/char-boy.png"
+          "images/char-boy.png",
+          "images/char-cat-girl.png",
+          "images/char-horn-girl.png",
+          "images/char-pink-girl.png",
+          "images/char-princess-girl.png",
+          "images/Selector.png",
+          "images/Gem Blue.png",
+          "images/Gem Green.png",
+          "images/Gem Orange.png",
+          "images/Heart.png",
+          "images/Key.png",
+          "images/Rock.png",
+          "images/Star.png"
         ]
       }
     };// ./GAME_BOARD = {};
@@ -1488,6 +1577,20 @@
               "style" : "green",
               "repeat" : false,
               "changestate" : true
+            },
+            "died" : {
+              "text" : "Avatar died {1}",
+              "speed" : -120,
+              "style" : "red",
+              "repeat" : false,
+              "changestate" : true
+            },
+            "gameover" : {
+              "text" : "Game over",
+              "speed" : -90,
+              "style" : "red",
+              "repeat" : false,
+              "changestate" : true
             }
           }
         },
@@ -1561,29 +1664,11 @@
       get : getState
     });
 
-    this.score = 0;
-    this.lives = this.APP_CONFIG.player.start.lives;
-    this.currentSettings = {
-      "levelTime" : 0
-    };
+    this.finiteState = {};
     this.limits = {};
     this.elapsedTimes = {};
-    console.log((new Date()).toISOString() + ' initializing Frogger instance');
-    // Setup to go to level 1 (index 0) when the engine is ready
-    this.lvlIndex = -1; //So first init will get to level 0
-    this.finiteState = {
-      "next" : null,
-      "timeout" : 0,
-      "changeOn" : "none"
-    };
-    this.state = ENUMS.STATE.gameover;
+    this.currentSettings = {};
     this.tracker = new PaceCar();
-
-    // add dummy tracker enemy object to the start of the list.  Use to:
-    // - check for collisions
-    // - stop enemies that have gone off canvas
-    // - start enemies that are due to enter the canvas
-    // - pre_update callback?
 
     console.log((new Date()).toISOString() + ' waiting for engineReady');
     // Setup a callback, so that details can be filled in when the Animation
@@ -1701,15 +1786,24 @@
     console.log((new Date()).toISOString() + ' reached Frogger.handleCommand');
     switch (request.command) {
     case 'space':
-      // Ignore the request unless currently waiting
-      // TODO: other cases to not ignore? abort 'dieing' animation?
-      if (this.state === ENUMS.STATE.waiting) {
-        if (this.finiteState.changeOn === ENUMS.CHANGE.trigger) {
-          this.finiteState.changeOn = ENUMS.CHANGE.now;
-        }
+      if (this.finiteState.changeOn === ENUMS.CHANGE.trigger) {
+        this.finiteState.changeOn = ENUMS.CHANGE.now;
+        this.tracker.scrollMessage = false;// Don't care if [not] scrolling
       }
       break;
     }
+    /* TODO: Implement other command processing
+     * Before game start
+     * - ? waiting and previous newlevel?
+     * - up|down (request) select avatar sprite
+     *   - this.finiteState.saveState = this.finiteState.current
+     *   - this.state = ENUMS.STATE.select
+     *   - left|right previous|next avatar sprite
+     *   - select highlighted sprite (and exit)
+     * TODO: more commands? specific (per) states? callbacks that live beyond
+     *     the state that set them up?
+     * switchKey = this.finiteSate.current + '|' + request.command
+     */
   };// ./function Frogger.prototype.handleStart()
 
   /**
@@ -1845,7 +1939,7 @@
     // - 'fade in'?
     // - start at column -1, and continue (no time advance)
     //   - lock out controls till in position, so no 'open field' to start?
-    // - initial load one enemy per row, positioned just page the width of the
+    // - initial load one enemy per row, positioned just past the width of the
     //   canvas (IE just finished the pass, no longer visible).  Set the
     //   startDistance for the first pattern to be >= the canvas width
     //   - make that 2 enemies per row? One just off each side of the canvas,
@@ -1881,8 +1975,7 @@
     }
     engineNs.player = this.player;
 
-    // TODO:
-    // - Add extra keycodes: space to start game: pause?; other?
+    // TODO: Add extra keycodes: for additional 'commands'
     // This listens for key presses and sends the keys to your
     // Player.handleInput() method. You don't need to modify this.
     document.addEventListener('keyup', function (e) {
@@ -1901,16 +1994,17 @@
       that.player.handleInput(allowedKeys[e.keyCode]);
     });
     document.addEventListener('ApplicationCommand', function (e) {
-      console.log((new Date()).toISOString() +
-        ' caught ApplicationCommand event'
+      console.log((new Date()).toISOString() + '" caught "' +
+        e.detail.command + '" ApplicationCommand'
         );
-      console.log(e.detail);
       // Access outer function Frogger constructor 'this' context through
       // closure scope 'that'
       that.handleCommand(e.detail);
     });
 
-    // Setup the game state for the current (first = 0) level
+    // Setup to go to level 1 (index 0) when the engine is ready
+    this.resetGame = true;
+    this.finiteState.current = ENUMS.STATE.gameover;
     this.finiteState.next = ENUMS.STATE.newlevel;
     this.finiteState.changeOn = ENUMS.CHANGE.now;
     console.log((new Date()).toISOString() + ' end Frogger.start');
@@ -2120,10 +2214,11 @@
       this.initLevel();
       break;
     case ENUMS.STATE.dieing:
-      this.player.die(this.reason);
+      this.player.die(this.reason);//NOTE: currently just a stub
       break;
     case ENUMS.STATE.resurrect:
-      this.player.resurrect();
+      this.player.resurrect();//NOTE: currently just a stub
+      this.initLevel();
       break;
     }// ./switch (this.state)
   };// ./Frogger.prototype.startState()

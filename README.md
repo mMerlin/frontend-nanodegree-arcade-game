@@ -13,6 +13,7 @@ This demonstrates the use of:
 * function callbacks
 * communication though custom events
 * smooth animation on html5 canvas
+* finite state machine
 
 See the live application running at
 http://mmerlin.github.io/frontend-nanodegree-arcade-game/
