@@ -1,5 +1,14 @@
 /*jslint browser: true, devel: true, todo: true, indent: 2, maxlen: 82 */
 /*global Resources, CustomEvent */
+/* jshint bitwise: true, curly: true, eqeqeq: true, es3: false,
+   forin: true, freeze: true, futurehostile: true, latedef: true,
+   maxcomplexity: 8, maxstatements: 35, noarg: true, nocomma: true,
+   noempty: true, nonew: true, singleGroups: true, undef: true, unused: true,
+   plusplus: true, strict: true, browser: true, devel: true
+*/
+// setting jshint es5: true currently causes messages about it now being set per
+// default, both when set explicitly, and after that for every place where
+// function scope validthis: true is being set.
 
 /* app.js
  * This file provides the functionality for the active game elements.  That is
@@ -53,7 +62,8 @@
     parent = window;
     currentPart = '';
 
-    for (i = 0, length = parts.length; i < length; i += 1) {
+    length = parts.length;
+    for (i = 0; i < length; i += 1) {
       currentPart = parts[i];
       parent[currentPart] = parent[currentPart] || {};
       parent = parent[currentPart];
@@ -92,6 +102,7 @@
    * @returns {boolean}
    */
   function arrayContains(obj) {
+    /* jshint validthis: true */
     var i;
 
     for (i = 0; i < this.length; i += 1) {
@@ -119,9 +130,12 @@
    * if the substituted values introduce additional markers.
    *
    * @param {Array} ary        Array of values to insert into string
+   * @param {Integer} lastKey  Value for the highest (largest) marker to
+   *                           process, defaults to ary.length
    * @returns {string}
    */
   function textInterpolate(ary, lastKey) {
+    /* jshint validthis: true */
     var idx, key;
     key = lastKey || ary.length;//Works, since never reaches key 0 falsey value
     idx = key - 1;
@@ -235,6 +249,29 @@
   //   return this;
   // }// ./function mergeProperties(obj)
 
+  /**
+   * Get the updated setting value from the configuration
+   *
+   * @param {Number} currentValue The current value for the setting
+   * @param {string} source       The configuration property name
+   * @return {Number}
+   */
+  function configUpdate(currentValue, source) {
+    /* jshint validthis: true */
+    if (this === undefined) {
+      // Configuration object does not exist; keep current value
+      return currentValue;
+    }
+    if (this[source]) {
+      return this[source];// Directly replace with the configuration value
+    }
+    if (this.delta && this.delta[source]) {
+      // Adjust the current value by the configured delta
+      return currentValue + this.delta[source];
+    }
+    return currentValue;// No configuration property; keep current value
+  }// ./function configUpdate(currentValue, source)
+
   ///////////////////////////////////////////
   // Create Sprite (pseudoclassical) Class //
   ///////////////////////////////////////////
@@ -319,6 +356,7 @@
   /**
    * Set the transform needed to flip the playing field coordinates horizontally
    *
+   * @param {Number} offset     Horizontal offset for transform
    * @return {undefined}
    */
   Sprite.prototype.setFlipTransform = function (offset) {
@@ -347,7 +385,7 @@
     // if (this.position.x < (0 - this.cell.width)) {// jslint: Unexpected 'this'
     // if (this.position.x < tst1) {// OK
     // if (this.position.x < -this.cell.width) {// OK
-    if ((this.position.x <= -this.cell.width) ||
+    if (this.position.x <= -this.cell.width ||
         this.position.x >= this.context.canvas.width
         ) {
         // Off canvas horizontally
@@ -369,6 +407,64 @@
       this.context.restore();
     }
   };// ./function Sprite.prototype.render()
+
+  /**
+   * Check if another sprite overlaps the current sprite position horizontally.
+   *
+   * This uses passed in parameters to determine the effective (collision
+   * sensitive) width of each of the sprites.
+   *
+   * NOTE: touching is NOT considered intersecting here.
+   *
+   * Assumption: The actual (not contact area) width of the sprites is the same.
+   * IE: Resources.get(this.sprite).width === Resources.get(target.sprite).width
+   * This means that there is no need to add half of each of those values to the
+   * sprite positions, to get a centre point to base collision detection on.
+   * selfCenter = this.position.x + (thisWidth / 2);
+   * targetCenter = target.position.x + (targetWidth / 2);
+   * the simple position.x values can be used directly.
+   *
+   * @param {Sprite} target     The other sprite to check for intersection with
+   * @param {Number} sHalfWidth Left and right collision size for 'this'
+   * @param {Number} tHalfWidth Left and right collision size for target
+   * @return {boolean}
+   */
+  Sprite.prototype.xIntersected = function (target, sHalfWidth, tHalfWidth) {
+    /* jshint singleGroups: false */
+    var thisLeft, thisRight, targetLeft, targetRight;
+
+    thisLeft = this.position.x - sHalfWidth;
+    thisRight = this.position.x + sHalfWidth;
+    targetLeft = target.position.x - tHalfWidth;
+    targetRight = target.position.x + tHalfWidth;
+
+    // Collision when:
+    //  targetLeft < thisLeft < targetRight ||
+    //  targetLeft < thisRight < targetRight ||
+    //  thisLeft < targetLeft < thisRight
+    // - extra check needed to handle case where target is wholly 'inside' this
+    // - Since widths are known, picking the check based on which is narrower
+    //   removes the last between check, and reduces (by one) the maximum number
+    //   of compares.
+    if (sHalfWidth > tHalfWidth) {
+      // 'this' contact area is larger, so enemy could be completely contained
+      if ((thisLeft < targetLeft && targetLeft < thisRight) ||
+          (thisLeft < targetRight && targetRight < thisRight)
+          ) {
+        return true;
+      }
+    } else {// !(sHalfWidth > tHalfWidth)
+      // Target contact is the same or smaller, so Target could be completely
+      // contained.
+      if ((targetLeft < thisLeft && thisLeft < targetRight) ||
+          (targetLeft < thisRight && thisRight < targetRight)
+          ) {
+        return true;
+      }
+    }// ./else !(sHalfWidth > tHalfWidth)
+
+    return false;
+  };// ./function Sprite.prototype.xIntersected(target, sHalfWidth, tHalfWidth)
 
   // /**
   //  * Do the sprite coordinates make it (at least partially) visible on the
@@ -401,6 +497,7 @@
    * @return {Number}
    */
   function setSpeed(newSpeed) {
+    /* jshint validthis: true */
     this.private.speed = newSpeed;
     this.position.flipped = false;
     if (newSpeed < 0) {
@@ -417,6 +514,7 @@
    * @return {Number}
    */
   function getSpeed() {
+    /* jshint validthis: true */
     return this.private.speed;
   }// ./function getSpeed()
 
@@ -429,8 +527,9 @@
    * @return {Integer}
    */
   function setColumn(colNum) {
+    /* jshint validthis: true */
     this.private.column = colNum;
-    this.position.x = (colNum * this.cell.width) + this.colOffset;
+    this.position.x = colNum * this.cell.width + this.colOffset;
     return this.private.column;
   }// ./function setColumn(colNum)
 
@@ -443,6 +542,7 @@
    * @return {Number}
    */
   function getColumn() {
+    /* jshint validthis: true */
     return this.private.column;
   }// ./function getColumn()
 
@@ -455,8 +555,9 @@
    * @return {Integer}
    */
   function setRow(rowNum) {
+    /* jshint validthis: true */
     this.private.row = rowNum;
-    this.position.y = (rowNum * this.cell.height) + this.rowOffset;
+    this.position.y = rowNum * this.cell.height + this.rowOffset;
     return this.private.row;
   }// ./function setRow(rowNum)
 
@@ -469,6 +570,7 @@
    * @return {Number}
    */
   function getRow() {
+    /* jshint validthis: true */
     return this.private.row;
   }// ./function getRow()
 
@@ -534,7 +636,7 @@
    * @return {undefined}
    */
   Enemy.prototype.update = function (dt) {
-    this.position.x += (this.speed * dt);// standard distance formula: Δs=v*Δt
+    this.position.x += this.speed * dt;// standard distance formula: Δs=v*Δt
   };// ./function Enemy.prototype.update(dt)
 
   /**
@@ -549,10 +651,7 @@
     // .x > (0 - (.cell.width - .colOffset))
     // .x > (.colOffset - .cell.width)
     var offsetX = this.position.x - this.colOffset;
-    return (
-      (offsetX > -this.cell.width) &&
-      (offsetX < this.context.canvas.width)
-    );
+    return offsetX > -this.cell.width && offsetX < this.context.canvas.width;
       // this.position.x > (this.colOffset - this.cell.width) &&
       // this.position.x < (this.context.canvas.width + this.colOffset) &&
   };// ./function Enemy.prototype.isOnCanvas()
@@ -570,10 +669,10 @@
   Enemy.prototype.isOffEnd = function () {
     // if (this.position.flipped) {
     if (this.speed < 0) {
-      return (this.position.x - this.colOffset <= -this.cell.width);
+      return this.position.x - this.colOffset <= -this.cell.width;
     }
-    return (this.position.x - this.colOffset >= this.context.canvas.width);
-  };// ./function prototype.isOffEnd()
+    return this.position.x - this.colOffset >= this.context.canvas.width;
+  };// ./function Enemy.prototype.isOffEnd()
 
 
   ////////////////////////////////////////////////
@@ -781,6 +880,7 @@
    * @return {boolean}
    */
   function validateStateTransition(targetState) {
+    /* jshint validthis: true */
     var transitions;
     if (!ENUMS.TRANSITIONS.hasOwnProperty(targetState)) {
       throw new Error('Unknown target state: "' + targetState + '"');
@@ -802,6 +902,7 @@
   }// ./function validateStateTransition(targetState)
 
   function getLevel() {
+    /* jshint validthis: true */
     return this.lvlIndex + 1;
   }// ./function getLevel()
 
@@ -813,6 +914,7 @@
    * @return {string}
    */
   function getState() {
+    /* jshint validthis: true */
     return this.finiteState.current;
   }// ./function getState()
 
@@ -821,10 +923,16 @@
    *
    * Frogger class state property setter function
    *
+   * jshint currently reports a cyclomatic complexity rating of 16 for this
+   * function.  Too high for normal things, but there does not seem to be a
+   * reasonable way to reduce it.  It appears that every 'case' clause increase
+   * the complexity by 1.
+   *
    * @param {string} newState   The destination state from ENUMS.STATE
    * @return {string}
    */
   function setState(newState) {
+    /* jshint validthis: true, maxcomplexity: 16 */
     var lockStatus, tmpMsg, tm;
     lockStatus = this.finiteState.lock;
     this.finiteState.lock = true;
@@ -863,6 +971,7 @@
 
     case ENUMS.STATE.newlevel:
       if (this.resetGame) {
+        this.resetGame = false;
         this.lvlIndex = -1; //So increment will get to level 0 (displayed as 1)
       }
       this.lvlIndex += 1;
@@ -895,6 +1004,11 @@
       tmpMsg.text = tmpMsg.text.
         replace('{1}', this.reason);
       this.tracker.message = tmpMsg;
+
+      if (this.elapsedTimes.level > this.currentSettings.levelTime) {
+        // Prevent display of "-0.0" when time expires
+        this.elapsedTimes.level = this.currentSettings.levelTime;
+      }
 
       this.finiteState.next = ENUMS.STATE.resurrect;
       // this.finiteState.delay = 5;//seconds for death throes
@@ -969,6 +1083,7 @@
    * @return {undefined}
    */
   function manageTime(deltaTime) {
+    /* jshint validthis: true */
     // Always up the time for the current state.  It is not actually used for
     // most states, but will never conflict.  Anywhere it WOULD conflict gets
     // its own separate property in this.elapsedTimes
@@ -994,6 +1109,7 @@
    * @return {string}
    */
   function getMessage() {
+    /* jshint validthis: true */
     return this.private.message;
   }// ./function getMessage()
 
@@ -1006,6 +1122,7 @@
    * @return {string}
    */
   function setMessage(message) {
+    /* jshint validthis: true */
     this.private.message = message;// Immutable
     // Setup to start displaying the new message
     this.scrollMessage = true;
@@ -1122,6 +1239,7 @@
        * @return {Integer}
        */
       function placeLabel(block, yPos) {
+        /* jshint validthis: true */
         var calcWidth;
         this.save();
         // Apply (cascading) overrides
@@ -1156,6 +1274,7 @@
        * @return {undefined}
        */
       function placeValue(val, desc, startX, endX, yPos) {
+        /* jshint validthis: true */
         var leftX, rightX, maxWidth, placeX;
         this.textAlign = desc.align;
         leftX = startX + desc.margin.left;
@@ -1164,7 +1283,7 @@
         if (desc.align === 'right') {
           placeX = rightX;
         } else if (desc.align === 'center') {
-          placeX = leftX + (maxWidth / 2);
+          placeX = leftX + maxWidth / 2;
         } else {// 'left', or any unrecognized alignment
           placeX = leftX;
         }
@@ -1253,7 +1372,7 @@
             ctx.fillText(this.message.text, this.scrollEnd + this.message.gap,
               hud.statusline.baseY + ctx.canvas.height
               );
-            this.scrollEnd += (this.message.gap + segWidths.scroll);
+            this.scrollEnd += this.message.gap + segWidths.scroll;
           }
         }
       } else {
@@ -1351,6 +1470,7 @@
      * forward from the previous level information.  Delta values can be used
      * in place of explicit values in many places.
      *
+
      * enemy {Object}
      *   spriteTile {string}  URL / resource key for all(?) enemy icons
      *   vertialOffset {Integer} Offset (pixels) to align to playing field grid
@@ -1364,6 +1484,7 @@
      *                        travel on.
      *   levels {Array}       One {Object} entry per game level
      *                    ??  need a way to continue past configured levels ??
+     *     sizeFactor {Number} The collision size fraction of enemy tile size
      *     rows {Array}       One {Array} entry per enemy (travelled) grid row
      *       {Array}          One {Object} entry per movement pattern used for
      *                        the level, row, and pattern
@@ -1409,8 +1530,10 @@
      *                    ??  need a way to continue past configured levels ??
      *     length {Number}    The actual length of time (seconds) allowed to
      *                        complete the level (without dieing)
+     *     sizeFactor {Number} The collision size fraction of avatar tile size
      *     delta {Object}     Values to adjust from previous level settings
      *       length {Number}  Change from previous level length
+
      * hud {Object}
      *   headline {Object}    Configuration for drawing text at canvas top
      *     baseY {Integer}    Pixel offset from top of canvas for text drawing
@@ -1457,6 +1580,7 @@
         "topRow" : 1,
         "levels" : [
           {
+            "sizeFactor" : 1.0,
             "rows" : [
               [
                 {
@@ -1541,6 +1665,7 @@
         "levels" : [
           {
             "length" : 10,
+            "sizeFactor" : 0.6,
             "goal" : [
               {
                 "row" : 0,
@@ -1667,7 +1792,10 @@
     this.finiteState = {};
     this.limits = {};
     this.elapsedTimes = {};
-    this.currentSettings = {};
+    this.currentSettings = {
+      "player" : {},
+      "enemy" : {}
+    };
     this.tracker = new PaceCar();
 
     console.log((new Date()).toISOString() + ' waiting for engineReady');
@@ -1804,23 +1932,18 @@
      *     the state that set them up?
      * switchKey = this.finiteSate.current + '|' + request.command
      */
-  };// ./function Frogger.prototype.handleStart()
+  };// ./function Frogger.prototype.handleCommand(request)
 
   /**
-   * Set the initial game state for the start of a level
+   * Build the initial level pattern configuration for each enemy row
    *
-   * QUERY: Should this be a (function scope) helper function, instead of a
-   *  shared prototype function? private vs possible inherit and override?
+   * See this.APP_CONFIG.enemy.reset for entry property descriptions.
+   *
    * @return {undefined}
    */
-  Frogger.prototype.initLevel = function () {
-    var gamConfig, row, sprite;
-    console.log((new Date()).toISOString() + ' reached Frogger.initLevel');
+  Frogger.prototype.initPatterns = function () {
+    var row, sprite;
 
-    gamConfig = this.APP_CONFIG.game.levels[this.lvlIndex];
-
-    // Build the initial level pattern configuration for each enemy row.  See
-    // this.APP_CONFIG.enemy.reset for entry property descriptions.
     delete this.currentPatterns;
     this.currentPatterns = [];
     // Potentially, different levels could have different numbers of rows active?
@@ -1838,24 +1961,31 @@
           ) {
         this.enemySprites[row][sprite].speed = 0;
         this.enemySprites[row][sprite].position.x = this.limits.offLeftX;
-      }
+      }// ./for (each sprite in enemy row)
       // Move the first sprite for each row to just after the canvas
       // NOTE: speed is always zero here, so no difference for negative speed
       this.enemySprites[row][0].position.x = this.limits.offRightX;
     }// ./for (row = 0; row < this.APP_CONFIG.enemy.maxSprites.length; row += 1)
 
-    // Adjust the (game) settings to use for the current level
+  };// /.function Frogger.prototype.initPatterns()
+
+  /**
+   * Update and load the application (game) level settings
+   *
+   * @return {undefined}
+   */
+  Frogger.prototype.initSettings = function () {
+    var gamConfig, lvlConfig;
+    gamConfig = this.APP_CONFIG.game.levels[this.lvlIndex];
+    lvlConfig = this.APP_CONFIG.enemy.levels[this.lvlIndex];
+
+    // gamConfig might be undefined.  Only need entry if storing changes for
+    // the current level.
+    this.currentSettings.levelTime = configUpdate.
+      call(gamConfig, this.currentSettings.levelTime, 'length');
+    this.currentSettings.player.sizeFactor = configUpdate.
+      call(gamConfig, this.currentSettings.player.sizeFactor, 'sizeFactor');
     if (gamConfig !== undefined) {
-      // gamConfig might be undefined.  Only need entry if storing changes for
-      // the current level.
-      if (gamConfig.length) {
-        this.currentSettings.levelTime = gamConfig.length;
-      }
-      if (gamConfig.delta) {
-        if (gamConfig.delta.length) {
-          this.currentSettings.levelTime += gamConfig.delta.length;
-        }
-      }
       if (gamConfig.goal) {
         // Just replace the whole array.  There does not seem to be a good (and
         // simple) structure to add/remove/update portions.  Keeping it optional
@@ -1864,6 +1994,37 @@
         this.currentSettings.goal = gamConfig.goal;
       }
     }// ./if (gamConfig !== undefined)
+
+    // lvlConfig needs to always exist.  The pattern information is complex
+    // enough to make cloning and modifying from previous levels 'problematic'
+    this.currentSettings.enemy.sizeFactor = configUpdate.
+      call(lvlConfig, this.currentSettings.enemy.sizeFactor, 'sizeFactor');
+  };// /.function Frogger.prototype.initSettings()
+
+  /**
+   * Set the initial game state for the start of a level
+   *
+   * QUERY: Should this be a (function scope) helper function, instead of a
+   *  shared prototype function? private vs possible inherit and override?
+   * @return {undefined}
+   */
+  Frogger.prototype.initLevel = function () {
+    console.log((new Date()).toISOString() + ' reached Frogger.initLevel');
+
+    this.initPatterns();
+    this.initSettings();
+
+    // Calculation level specific collision detection parameters
+    // Assumptions:
+    // - all enemy sprites are the same size
+    // - neither player nor enemy sizes are going to change while a level is in
+    //   progress
+    this.currentSettings.player.halfWidth =
+      this.currentSettings.player.sizeFactor *
+      this.player.cell.width / 2;
+    this.currentSettings.enemy.halfWidth =
+      this.currentSettings.enemy.sizeFactor *
+      this.enemySprites[0][0].cell.width / 2;
 
     // Move the player avatar back to the starting location
     this.player.col = this.APP_CONFIG.player.start.col;
@@ -2030,12 +2191,12 @@
     // This needs to be smarter to handle more of the intended cases.  For now,
     // just get it setup for the base case of one pattern per level, but add
     // sanity checks to make sure that is REALLY the scenario.
-    if ((startDistance !== 0) ||
-        (pattern.head !== 0) ||
-        (pattern.tail !== 1) ||
-        (sprites[pattern.tail].speed !== 0) ||
-        (sprites[pattern.head].speed !== 0) ||
-        (this.lastVisible(rowIndex) !== pattern.head)
+    if (startDistance !== 0 ||
+        pattern.head !== 0 ||
+        pattern.tail !== 1 ||
+        sprites[pattern.tail].speed !== 0 ||
+        sprites[pattern.head].speed !== 0 ||
+        this.lastVisible(rowIndex) !== pattern.head
         ) {
       throw new Error('unknown pattern change combination for level ' +
         this.level
@@ -2139,48 +2300,49 @@
         this.addSprite(row);// Pull a sprite from the recycled set.
         // Position it where it belongs (off canvas), and get it moving
         rowEnemies[rowState.tail].position.x = lastX -
-          (this.nextDistance(row) * this.GAME_BOARD.canvas.cellSize.width);
+          this.nextDistance(row) * this.GAME_BOARD.canvas.cellSize.width;
         rowEnemies[rowState.tail].speed = rowState.speed;
       }
     }// ./for (row = 0; row < this.currentPatterns.length; row += 1)
   };// ./function Frogger.prototype.refreshEnemyQueues()
 
   /**
-   * Check for player avatar collisions with anything that is going to change
-   * game state
+   * Check for level completion conditions
    *
-   * @return {boolean}    Was state changing collision detected?
+   * @return {boolean}    Goal was reach, changing game state
    */
-  Frogger.prototype.collisionCheck = function () {
-    var goal, goals;
-    /* None of the collision detection needs to worry about the y coordinate in
-     * more detail than the grid row.  None of the game features can be placed
-     * (vertically) outside a row.  At least as far as collision detection is
-     * concerned.  Offsets are used for visual adjustments, but do not affect
-     * the location for vertical positioning. */
-
-    // check for collision with 'prize' sprites
-    /* Check for prize collection first, so can collect when landing on it while
-       moving past the goal line. */
-    //TODO: if (this.player.row <= this.APP_CONFIG.game.start.row)
-    // This does NOT change game state, so do not return anything yet
-
-    // check for collision with 'goal'; check for success before check for fail
+  Frogger.prototype.goalCheck = function () {
+    var goals, goal;
     goals = this.currentSettings.goal;
     for (goal = 0; goal < goals.length; goal += 1) {
+      // Check each defined goal for the level
       if (this.player.row === goals[goal].row &&
           arrayContains.call(goals[goal].cols, this.player.col)
           ) {
+        // The player [row,col] matches a goal line case
         this.state = ENUMS.STATE.donelevel;
         return true;
       }
-    }
+    }// ./for (goal = 0; goal < goals.length; goal += 1)
 
+    return false;
+  };// ./function Frogger.prototype.goalCheck()
+
+  /**
+   * Check for player avatar collision with the edge of the playing field
+   *
+   * *CURRENTLY* an Avatar instance only moves in grid cell size steps.  That
+   * could change if things like riding on a log are implemented.
+   *
+   * NOTE: Initially looked more reasonable to implement this as an Avatar
+   * prototype method, but currently an Avatar instance does not have access to
+   * the playing field grid information.  Providing that would cause undesired
+   * coupling with the application.
+   *
+   * @return {boolean}    Went past playing field boundary
+   */
+  Frogger.prototype.playerBoundsCheck = function () {
     // check for collision with game field boundaries
-    /* *CURRENTLY* avatar only moves in grid cell size steps.  That could change
-       if implement things like riding on logs. */
-    // The whole playing field is valid (although some if it will be caught by
-    // the previous 'goal line' check).
     if (this.player.row < 0 ||
         this.player.row >= this.GAME_BOARD.canvas.gridRows ||
         this.player.col < 0 ||
@@ -2191,11 +2353,86 @@
       return true;
     }// ./if (player outside canvas)
 
-    // check for collision with enemy sprite (current avatar row only)
-    // TODO:
+  };// ./function Frogger.prototype.playerBoundsCheck()
 
-    return false;
-  };// ./Frogger.prototype.collisionCheck()
+  /**
+   * Check if the player avatar has collided with an enemy sprite.
+   *
+   * This only needs to check for collisions with the sprites that are in the
+   * grid row currently being occupied by the avatar.
+   *
+   * @return {boolean}    Collided, and game state changing
+   */
+  Frogger.prototype.playerEnemyCheck = function () {
+    var enIdx, enRow, avHalfWidth, enHalfWidth, enemy;
+
+    // Get the enemies that the avatar could be colliding with.
+    // Offset needed because first (zeroth) Enemy row is not grid row zero
+    enIdx = this.player.row - this.APP_CONFIG.enemy.topRow;
+    enRow = this.enemySprites[enIdx];
+    if (enRow) {
+      // Enemy sprites exist on the same grid row as the player avatar
+
+      // Get the half (left and right) collision area size of player avatars
+      // and enemy sprites
+      avHalfWidth = this.currentSettings.player.halfWidth;
+      enHalfWidth = this.currentSettings.enemy.halfWidth;
+
+      // Follow the active entries in the enemy circular queue from head to
+      // tail.  the tail entry does not need to be processed.  It is still off
+      // of the canvas.
+      enemy = this.currentPatterns[enIdx].head;
+      while (enemy !== this.currentPatterns[enIdx].tail) {
+        // Check for (only) a horizontal overlap between the avatar and a single
+        // (visible) enemy sprite
+        if (this.player.
+            xIntersected(enRow[enemy], avHalfWidth, enHalfWidth)
+            ) {
+          // Found a collision.  No point in checking for any more
+          // IDEA: Hit and run when overlap small, walking into vehicle when
+          // overlap is large.
+          this.reason = 'from hit and run';
+          this.state = ENUMS.STATE.dieing;
+          return true;
+        }// ./if (Avatar to Enemy collision)
+
+        // Move to the next active enemy in the circular queue
+        enemy += 1;
+        if (enemy >= this.APP_CONFIG.enemy.maxSprites[enIdx]) {
+          enemy = 0;// Wrap to the start of the buffer
+        }
+      }// ./while (enemy !== this.currentPatterns[enIdx].tail)
+    }// ./if (enRow)
+
+    return false;// No collision
+  };// ./function Frogger.prototype.playerEnemyCheck()
+
+  /**
+   * Check for player avatar collisions with anything that is going to change
+   * game state
+   *
+   * None of the collision detection needs to worry about the y coordinate in
+   * more detail than the grid row.  None of the game features can be placed
+   * (vertically) outside a row.  At least as far as collision detection is
+   * concerned.  Offsets are used for visual adjustments, but do not affect
+   * the location for vertical positioning.
+   *
+   * @return {boolean}    Was state changing collision detected?
+   */
+  Frogger.prototype.collisionCheck = function () {
+    // check for collision with 'prize' sprites
+    /* Check for prize collection first, so can collect when landing on it while
+       moving past the goal line. */
+    //TODO: if (this.player.row <= this.APP_CONFIG.game.start.row)
+    // This does NOT change game state, so do not return anything yet
+
+    // check for collision with 'goal'; check for success before check for fail
+    if (this.goalCheck()) { return true; }// goal line collision
+    if (this.playerBoundsCheck()) { return true; }// world edge collision
+    if (this.playerEnemyCheck()) { return true; }// enemy collision
+
+    return false;// No state changing collision
+  };// ./function Frogger.prototype.collisionCheck()
 
   /**
    * Do any processing need to 'start' the current state.
@@ -2221,7 +2458,7 @@
       this.initLevel();
       break;
     }// ./switch (this.state)
-  };// ./Frogger.prototype.startState()
+  };// ./function Frogger.prototype.startState()
 
   /**
    * Game state processing to do (at the start of) each animation frame
