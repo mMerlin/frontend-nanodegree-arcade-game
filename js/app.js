@@ -6,9 +6,6 @@
    noempty: true, nonew: true, singleGroups: true, undef: true, unused: true,
    plusplus: true, strict: true, browser: true, devel: true
 */
-// setting jshint es5: true currently causes messages about it now being set per
-// default, both when set explicitly, and after that for every place where
-// function scope validthis: true is being set.
 
 /* app.js
  * This file provides the functionality for the active game elements.  That is
@@ -54,7 +51,7 @@
    *
    * Ref: http://elegantcode.com/2011/01/26/basic-javascript-part-8-namespaces/
    *
-   * @param {string} namespaceString
+   * @param {string} namespaceString The dotted path to the last object
    */
   function namespace(namespaceString) {
     var i, parts, parent, currentPart, length;
@@ -75,8 +72,8 @@
   /**
    * Create a custom event with fall back that works in IE (11 at least)
    *
-   * @param {string} evName  The name for the custom event
-   * @param {Object} evObj   The properties to include in the event details.
+   * @param {string} evName     The name for the custom event
+   * @param {Object} evObj      The properties to include in the event details.
    * @returns {CustomEvent}
    */
   function makeCustomEvent(evName, evObj) {
@@ -91,7 +88,6 @@
     }
     return cstEvnt;
   }// ./function makeCustomEvent(evName, evObj)
-
   /**
    * Check if the current ('this') array contains a specific element / value
    *
@@ -129,9 +125,9 @@
    * This does the substitutions in descending sequence, which can be important
    * if the substituted values introduce additional markers.
    *
-   * @param {Array} ary        Array of values to insert into string
-   * @param {Integer} lastKey  Value for the highest (largest) marker to
-   *                           process, defaults to ary.length
+   * @param {Array} ary         Array of values to insert into string
+   * @param {Integer} lastKey   Value for the highest (largest) marker to
+   *                            process, defaults to ary.length
    * @returns {string}
    */
   function textInterpolate(ary, lastKey) {
@@ -253,7 +249,7 @@
    * Get the updated setting value from the configuration
    *
    * @param {Number} currentValue The current value for the setting
-   * @param {string} source       The configuration property name
+   * @param {string} source     The configuration property name
    * @return {Number}
    */
   function configUpdate(currentValue, source) {
@@ -272,6 +268,84 @@
     return currentValue;// No configuration property; keep current value
   }// ./function configUpdate(currentValue, source)
 
+  /**
+   * Modify configuration settings from delta information
+   *
+   * Call with the ('this') context set to an Object containing change
+   * information
+   *
+   * @param {Object} target     Configuration object with properties to updated
+   * @return {undefined}
+   */
+  function deltaConfigUpdate(target) {
+    /* jshint validthis: true */
+    var p;
+    for (p in this) {
+      if (this.hasOwnProperty(p)) {
+        // For each local (Own) property of 'this' (which is a 'delta' object)
+        if (this[p] === null) {
+          // delta property is null; delete the matching configuration property
+          delete target[p];
+        } else if (typeof this[p] === "number") {
+          // The 'normal' case; the delta is a numeric value, just add it to the
+          // existing configuration value
+          if (target[p] === undefined) {
+            // Safety net, in case the configuration property does not exist yet
+            target[p] = 0;
+          }
+          target[p] += this[p];
+        } else {// .!(this[p] === undefined || typeof this[p] === "number")
+          // Odd delta, just copy the value to the configuration property
+          target[p] = deepCopyOf(this[p]);
+        }// ./else !(this[p] === undefined || typeof this[p] === "number")
+      }// ./if (this.hasOwnProperty(p))
+    }// ./for (p in this)
+  }// ./function deltaConfigUpdate(target)
+
+  /**
+   * Get the updated setting value from the configuration
+   *
+   * @param {Object} target     Object with properties to be updated
+   * @param {string} source     The configuration property name
+   * @return {Object}           undefined or true
+   */
+  function nestedConfigUpdate(target, source) {
+    /* jshint validthis: true */
+    var p, delta;
+    if (this === undefined || this[source]  === undefined) {
+      // Configuration object does not exist; keep current values
+      return undefined;
+    }
+    if (target[source] === undefined) {
+      target[source] = {};
+    }
+    delta = false;
+    for (p in this[source]) {
+      if (this[source].hasOwnProperty(p)) {
+        if (typeof this[source][p] === 'object') {
+          if (p === 'delta') {
+            delta = true;// Just set flag; process any delta last
+          } else {
+            // Recursively do updates for nested objects
+            nestedConfigUpdate.
+              call(this[source], target[source], p);
+          }
+        } else {// !(typeof this[source][p] === 'object')
+          target[source][p] = configUpdate.
+            call(this[source], target[source][p], p);
+          //target[source][p] = this[source][p];
+        }// ./else !(typeof this[source][p] === 'object')
+      }// ./if (this[source].hasOwnProperty(p))
+    }// ./for (p in this[source])
+
+    if (delta) {
+      // Process the included delta information
+      deltaConfigUpdate.call(this[source].delta, target[source]);
+    }
+
+    return true;
+  }// ./function nestedConfigUpdate(target, source)
+
   ///////////////////////////////////////////
   // Create Sprite (pseudoclassical) Class //
   ///////////////////////////////////////////
@@ -284,7 +358,7 @@
    * function, to provide hiding of (class) private data and methods in the
    * function scope.
    *
-   * @return {Function} Sprite class constructor
+   * @return {Function}         Sprite class constructor
    */
   Sprite = (function () {
     // Private data for the class, accessible only be methods defined in the
@@ -300,7 +374,7 @@
     /**
      * Get the next available (unique) Sprite serial number
      *
-     * @return {Integer} Sprite serial number
+     * @return {Integer}        Sprite serial number
      */
     function getNextId() {
       lastId += 1;
@@ -318,13 +392,13 @@
      *  initially create an instance of a Sprite.  However, they will all need to
      *  be filled in before the sprite can actually be displayed.
      *
-     * @param {string} imgRsrc       URL for the image file, which in this
+     * @param {string} imgRsrc  URL for the image file, which in this
      *                    context is the key to the cached image resource.
-     * @param {Number} spriteX       x coordinate of the sprite
-     * @param {Number} spriteY       y coordinate of the sprite
-     * @param {Object} spriteCanvas  The CanvasRenderingContext2D to display the
+     * @param {Number} spriteX  x coordinate of the sprite
+     * @param {Number} spriteY  y coordinate of the sprite
+     * @param {Object} spriteCanvas The CanvasRenderingContext2D to display the
      *                    sprite on.
-     * @return {Object} Sprite instance
+     * @return {Object}         Sprite instance
      */
     Sprite = function (imgRsrc, spriteX, spriteY, spriteContext) {
       this.private = {};// (psuedo) private storage for class instances
@@ -493,7 +567,7 @@
    *
    * Enemy class speed property setter function
    *
-   * @param {Number} newSpeed     Pixels per Second
+   * @param {Number} newSpeed   Pixels per Second
    * @return {Number}
    */
   function setSpeed(newSpeed) {
@@ -523,7 +597,7 @@
    *
    * Enemy class column property setter function
    *
-   * @param {Integer} colNumber   The grid column for the sprite
+   * @param {Integer} colNumber The grid column for the sprite
    * @return {Integer}
    */
   function setColumn(colNum) {
@@ -551,7 +625,7 @@
    *
    * Enemy class row property setter function
    *
-   * @param {Integer} rowNumber   The grid row for the sprite
+   * @param {Integer} rowNumber The grid row for the sprite
    * @return {Integer}
    */
   function setRow(rowNum) {
@@ -580,15 +654,15 @@
    * A Pseudoclassical subClass (of Sprite) to hold information about enemy
    * sprites the avatar must avoid.
    *
-   * @param {string} imgRsrc      URL for the image file, which in this context
+   * @param {string} imgRsrc    URL for the image file, which in this context
    *                    is the key to the cached image resource.
-   * @param {Integer} gridRow     The logical grid row for the instance
-   * @param {Integer} ofstVert    The vertical (pixel) offset from the grid row
-   * @param {Number} speed        The sprite movement speed (pixels/second)
+   * @param {Integer} gridRow   The logical grid row for the instance
+   * @param {Integer} ofstVert  The vertical (pixel) offset from the grid row
+   * @param {Number} speed      The sprite movement speed (pixels/second)
    * @param {Object} cvsContext The CanvasRenderingContext2D to display the
    *                    sprite on.
-   * @param {Object} gridCell     Dimensions for a single cell on the grid
-   * @return {Object} Enemy instance
+   * @param {Object} gridCell   Dimensions for a single cell on the grid
+   * @return {Object}           Enemy instance
    */
   function Enemy(imgRsrc, gridRow, ofstVert, speed, cvsContext, gridCell) {
     Sprite.call(this, imgRsrc, undefined, undefined, cvsContext);
@@ -632,7 +706,7 @@
    * (Current) Enemies only move horizontally, so only the x position is
    * changing.
    *
-   * @param {Number} dt   Delta Time (since previous update) in seconds
+   * @param {Number} dt         Delta Time (since previous update) in seconds
    * @return {undefined}
    */
   Enemy.prototype.update = function (dt) {
@@ -685,17 +759,17 @@
    * A Pseudoclassical subClass (of Enemy) to hold information about a player
    * avatar that will be placed and managed as part of the application (game).
    *
-   * @param {string} imgRsrc      URL for the image file, which in this context
+   * @param {string} imgRsrc    URL for the image file, which in this context
    *                    is the key to the cached image resource.
-   * @param {Integer} gridRow     The logical grid row for the instance
-   * @param {Integer} gridCol     The logical grid column for the instance
-   * @param {Integer} ofstVert    The vertical (pixel) offset from the grid row
-   * @param {Integer} ofstHoriz   The horizontal (pixel) offset from the grid
-   *                              column
+   * @param {Integer} gridRow   The logical grid row for the instance
+   * @param {Integer} gridCol   The logical grid column for the instance
+   * @param {Integer} ofstVert  The vertical (pixel) offset from the grid row
+   * @param {Integer} ofstHoriz The horizontal (pixel) offset from the grid
+   *                            column
    * @param {Object} cvsContext The CanvasRenderingContext2D to display the
    *                    sprite on.
-   * @param {Object} gridCell     Dimensions for a single cell on the grid
-   * @return {Object} Avatar instance
+   * @param {Object} gridCell   Dimensions for a single cell on the grid
+   * @return {Object}           Avatar instance
    */
   function Avatar(imgRsrc, gridRow, gridCol, ofstVert, ofstHoriz, cvsContext,
       gridCell
@@ -718,7 +792,7 @@
   /**
    * Respond to position change commands
    *
-   * @param {string} cmd A movement command
+   * @param {string} cmd        A movement command
    * @return {undefined}
    */
   Avatar.prototype.handleInput = function (cmd) {
@@ -793,6 +867,7 @@
    * @return {undefined}
    */
   Avatar.prototype.die = function (cause) {
+    // this.freezeEnemies();
     // TODO: stub
     // Save any internal state before changing to show the death throes
     // change icon? animate? spin and shrink?
@@ -838,7 +913,19 @@
       "trigger" : "Trigger",
       "elapsed" : "Elapsed"
     },
-    "TRANSITIONS" : {}
+    "TRANSITIONS" : {},
+    "BONUS" : {
+      "score" : "score",
+      "lives" : "lives",
+      "speed" : "speed",
+      "time" : "time"
+    },
+    "MOTION" : {
+      "static" : "static",
+      "acceleration" : "acceleration",
+      "coasting" : "coasting",
+      "deceleration" : "deceleration"
+    }
   };
   // Lookup for valid state transitions: target from (one of) current)
   // Can not populate direction in the JSON structure, since it uses constants
@@ -933,7 +1020,7 @@
    */
   function setState(newState) {
     /* jshint validthis: true, maxcomplexity: 16 */
-    var lockStatus, tmpMsg, tm;
+    var lockStatus, tmpMsg;
     lockStatus = this.finiteState.lock;
     this.finiteState.lock = true;
     console.log((new Date()).toISOString() + ' changing state: "' +
@@ -1000,6 +1087,7 @@
       break;
 
     case ENUMS.STATE.dieing:
+      this.freezeEnemies();
       tmpMsg = deepCopyOf(this.APP_CONFIG.hud.statusline.templates.died);
       tmpMsg.text = tmpMsg.text.
         replace('{1}', this.reason);
@@ -1020,13 +1108,10 @@
       break;
 
     case ENUMS.STATE.donelevel:
-      tm = this.currentSettings.levelTime - this.elapsedTimes.level;
-      tmpMsg = deepCopyOf(this.APP_CONFIG.hud.statusline.templates.levelComplete);
-      tmpMsg.text = textInterpolate.call(tmpMsg.text,
-        [this.level, Number(tm.toFixed(1))]);
-      this.tracker.message = tmpMsg;
+      this.freezeEnemies();
       this.finiteState.next = ENUMS.STATE.newlevel;
       this.finiteState.changeOn = ENUMS.CHANGE.trigger;
+      this.finiteState.doCurrent = true;
       break;
 
     case ENUMS.STATE.resurrect:
@@ -1079,7 +1164,7 @@
   /**
    * Advance internal application time values based on the current state
    *
-   * @param {Number} deltaTime    Seconds elapsed since previous frame processed
+   * @param {Number} deltaTime  Seconds elapsed since previous frame processed
    * @return {undefined}
    */
   function manageTime(deltaTime) {
@@ -1135,7 +1220,7 @@
   /**
    * Class to control the application and operations sequence
    *
-   * @return {Object} Application instance
+   * @return {Object}           Application instance
    */
   function Frogger() {
     var that;
@@ -1173,12 +1258,20 @@
      *
      * @param {Object} spriteCanvas The CanvasRenderingContext2D to display the
      *                    information on.
-     * @return {Object} PaceCar instance
+     * @return {Object}         PaceCar instance
      */
-    function PaceCar(cvsContext) {
-      // Access outer function Frogger constructor 'this' context through 'that'
-      Sprite.call(this, that.APP_CONFIG.enemy.spriteTile, 0,
-        undefined, cvsContext);
+    function PaceCar(ownerInstance, cvsContext) {
+      // Get an explicit reference during construction, instead of relying on
+      // accessing outer function Frogger constructor 'this' context through
+      // 'that'.  A little bit of decoupling.
+      this.owner = ownerInstance;
+      this.animation = {
+        "score" : {
+          "displayScore" : 0
+        }
+      };
+      this.animation.score.tuning = {};// DEBUG
+      Sprite.call(this, undefined, 0, undefined, cvsContext);
       this.speed = 0;// Not using the setter from Enemy
       this.scrollMessage = false;
       // Automatically update dependant properties on state changes
@@ -1192,14 +1285,182 @@
     PaceCar.prototype.constructor = PaceCar;
 
     /**
+     * Animate score increases using standard distance equations.
+     *
+     * s1 = s0 + v0 × Δt + ½a × Δt²
+     * v1 = v0 + a × Δt
+     *
+     * @param {Number} deltaTime (Fractional) seconds since previous update
+     * @return {undefined}
+     */
+    PaceCar.prototype.animateScoring = function (deltaTime) {
+      var dat, prm, tune, tnDt;// Debug==tune, tnDt
+      dat = this.animation.score;
+      tune = dat.tuning;// Debug
+      if (dat.displayScore > this.owner.score) {
+        // Straight jump on decrease (only expected for reset to zero)
+        // TODO: could (fast) animate this too
+        dat.displayScore = this.owner.score;
+        dat.state = ENUMS.MOTION.static;
+        return;
+      }// ./if (dat.displayScore > this.owner.score)
+      if (dat.displayScore === this.owner.score) {
+        // Check for any cleanup needed from previous??
+        dat.state = ENUMS.MOTION.static;
+        return;
+      }// ./if (dat.displayScore === this.owner.score)
+
+      // The score is higher than displayed: Animate the increase 'spin' rate.
+      prm = this.owner.APP_CONFIG.hud.animation.score;
+      if (dat.state === ENUMS.MOTION.static) {// Setup initial parameters
+        dat.s1 = dat.displayScore;
+        dat.target = dat.displayScore;
+        dat.v1 = 0;
+        dat.a = prm.acceleration;
+        // Tweak the first time reference, since animating 0 change is useless.
+        // 'Pretend' that the acceleration has been going on just long enough to
+        // get the first (integer) step increase, rounded from 0.5 + ε
+        // 0.5 + ε = ½a × Δt² ==> t = sqrt((1 + ε)/a)
+        dat.dt = Math.sqrt(1.001 / dat.a) - deltaTime;
+        tune.step = 0;// DEBUG
+        tune.timeSkip = dat.dt + deltaTime;// DEBUG
+        tune.refPoint = [];// DEBUG
+        tune.animTime = 0;// DEBUG
+      }// ./if (dat.state === ENUMS.MOTION.static)
+
+      if (this.owner.score > dat.target + 0.5) {// Target changed
+        // Handle both initial start, and change while animating
+        tnDt = {// DEBUG
+          "context" : 'change',
+          "display" : dat.displayScore,
+          "target0" : dat.target,
+          "s0" : dat.s0,
+          "s1" : dat.s1,
+          "v0" : dat.v0,
+          "v1" : dat.v1,
+          "a0" : dat.a,
+          "state0" : dat.state,
+          "step" : tune.step,
+          "timeRef" : tune.animTime
+        };
+
+        // Setup animation parameters to continue from the current conditions
+        dat.target = this.owner.score - 0.499;// Offset better for int step
+        dat.s0 = dat.s1;// Displayed score when score changed
+        dat.v0 = dat.v1;// Velocity when score changed
+        dat.a = prm.acceleration;// Set to accelerate; normal logic will
+        dat.state = ENUMS.MOTION.acceleration;// 'catch up' as needed
+
+        tnDt.target1 = dat.target;// Debug
+        tnDt.a1 = dat.a;// Debug
+        tnDt.state1 = dat.state;
+        tune.refPoint.push(tnDt);// Debug
+      }// ./if (this.owner.score > dat.target + 0.5)
+
+      if (dat.state === ENUMS.MOTION.acceleration) {// Fast enough yet?
+        // s1 + v1 × Δt >= s{target}
+        if (dat.s1 + dat.v1 * prm.coasting >= dat.target) {
+          tnDt = {// DEBUG
+            "context" : 'coast',
+            "display" : dat.displayScore,
+            "target" : dat.target,
+            "s0" : dat.s0,
+            "s1" : dat.s1,
+            "v0" : dat.v0,
+            "v1" : dat.v1,
+            "a0" : dat.a,
+            "state0" : dat.state,
+            "step" : tune.step,
+            "timeRef" : tune.animTime
+          };
+          // v1 is high enough to reach the target in .coasting seconds.
+          dat.s0 = dat.s1;// Score when acceleration stopped
+          dat.v0 = dat.v1;// Velocity when acceleration stopped
+          dat.a = 0;
+          dat.dt = 0;// New reference point
+          dat.state = ENUMS.MOTION.coasting;
+
+          tnDt.a1 = dat.a;// Debug
+          tnDt.state1 = dat.state;
+          tune.refPoint.push(tnDt);// Debug
+        }// ./if (dat.s1 + dat.v1 * prm.coasting >= dat.target)
+      }// ./if (dat.state === ENUMS.MOTION.acceleration)
+
+      if (dat.state === ENUMS.MOTION.coasting) {// change to landing?
+        // s1 + v1 × Δt >= s{target}
+        if (dat.s1 + dat.v1 * prm.turnover >= dat.target) {
+          tnDt = {// DEBUG
+            "context" : 'land',
+            "display" : dat.displayScore,
+            "target" : dat.target,
+            "s0" : dat.s0,
+            "s1" : dat.s1,
+            "v0" : dat.v0,
+            "v1" : dat.v1,// = .v0
+            "a0" : dat.a,// zero
+            "state0" : dat.state,
+            "step" : tune.step,
+            "timeRef" : tune.animTime
+          };
+          // s1 high enough to reach the target (coasting) in .turnover seconds
+          // Decelerate to 'land' exactly at .target after .landing seconds
+          dat.s0 = dat.s1;// Score when deceleration started
+          // s1 = s0 + v0 × Δt + ½a × Δt² ==> a = 2 × (s1 - s0 - v0 × Δt) / Δt²
+          dat.a = 2 *
+            (dat.target - dat.s0 - dat.v0 * prm.landing) /
+            (prm.landing * prm.landing);
+          dat.dt = 0;// New reference point (@ dat.s1 === .s0)
+          dat.state = ENUMS.MOTION.deceleration;
+
+          tnDt.state1 = dat.state;
+          tune.refPoint.push(tnDt);// Debug
+        }// ./if (dat.s1 + dat.v1 * prm.turnover >= dat.target)
+      }// ./if (dat.state === ENUMS.MOTION.coasting)
+
+      // TODO: ? check if .v1 < 0 ?
+      dat.dt += deltaTime;
+      tune.animTime += deltaTime;// Debug
+      // s1 = s0 + v0 × Δt + ½a × Δt²
+      dat.s1 = dat.s0 + dat.v0 * dat.dt +
+        dat.a * dat.dt * dat.dt / 2;
+      dat.v1 = dat.v0 + dat.a * dat.dt;// As of previous Δt
+      tune.step += 1;// Debug
+      // dat.displayScore = parseInt(Number(dat.s1).toFixed(0),10);
+      dat.displayScore = Math.round(dat.s1);
+      if (dat.displayScore >= this.owner.score) {
+        tnDt = {
+          "context" : 'landed',
+          "display" : dat.displayScore,
+          "owner" : this.owner.score,
+          "target" : dat.target,
+          "s0" : dat.s0,
+          "s1" : dat.s1,
+          "v0" : dat.v0,
+          "v1" : dat.v1,
+          "a0" : dat.a,// negative
+          "step" : tune.step,
+          "state0" : dat.state,
+          "timeRef" : tune.animTime
+        };
+        dat.state = ENUMS.MOTION.static;
+        tnDt.state1 = dat.state;// Debug
+        tune.refPoint.push(tnDt);// Debug
+        console.log(tune, ', .refPoints==>');// Debug
+        for (tnDt = 0; tnDt < tune.refPoint.length; tnDt += 1) {
+          console.log(JSON.stringify(tune.refPoint[tnDt]));
+        }
+        tnDt = 0;
+      }// ./if (dat.displayScore >= this.owner.score)
+    };// ./function PaceCar.prototype.animateScoring = function (deltaTime)
+
+    /**
      * Update game state based on the elapsed time in the animation engine
      *
-     * @param {Number} deltaTime  (Fractional) seconds since previous update
+     * @param {Number} deltaTime (Fractional) seconds since previous update
      * @return {undefined}
      */
     PaceCar.prototype.update = function (deltaTime) {
-      // Access outer function Frogger constructor 'this' context through 'that'
-      that.next(deltaTime);
+      this.owner.next(deltaTime);
       // Update the instance position as well, to handle scrolling HUD messages
       if (this.scrollMessage) {
         if (this.scrollEnd < 0) {
@@ -1209,13 +1470,15 @@
           this.scrollEnd = this.position.x;
           if (this.message.changestate) {
             this.message.changestate = false;
-            that.finiteState.changeOn = ENUMS.CHANGE.now;
+            this.owner.finiteState.changeOn = ENUMS.CHANGE.now;
           }
-        } else {
+        } else {// !(this.scrollEnd < 0)
           this.position.x += this.message.speed * deltaTime;
-        }
+        }// ./else !(this.scrollEnd < 0)
         //TODO: add logic to change the message occasionally
-      }
+      }// ./if (this.scrollMessage)
+
+      this.animateScoring(deltaTime);
     };// ./function PaceCar.prototype.update(deltaTime)
 
     /**
@@ -1228,14 +1491,15 @@
      */
     PaceCar.prototype.render = function () {
       var ctx, hud, segWidths, tm, tmStr;
-      // Access outer function Frogger constructor 'this' context through 'that'
 
       /**
        * Helper function to place a piece of constant text based on a descriptor
        * block
        *
-       * @param {Object} block Properties define what and where to place the text
-       * @param {Integer} yPos The vertical position to place the text
+       * Invoked with 'this' referencing a CanvasRenderingContext2D object
+       *
+       * @param {Object} block  Properties define what and where to place the text
+       * @param {Integer} yPos  The vertical position to place the text
        * @return {Integer}
        */
       function placeLabel(block, yPos) {
@@ -1266,11 +1530,13 @@
        * following label text, then applies margin information to calculate where
        * to place the text, and what width limit to apply.
        *
+       * Invoked with 'this' referencing a CanvasRenderingContext2D object
+       *
        * @param {string|Integer} val value to be drawn as text
-       * @param {Object} desc     Placement properties for val
-       * @param {Object} startX   Ending position for the preceding label
-       * @param {Object} endX     Starting position the following label
-       * @param {Integer} yPos    The vertical position to place the text
+       * @param {Object} desc   Placement properties for val
+       * @param {Object} startX Ending position for the preceding label
+       * @param {Object} endX   Starting position the following label
+       * @param {Integer} yPos  The vertical position to place the text
        * @return {undefined}
        */
       function placeValue(val, desc, startX, endX, yPos) {
@@ -1293,7 +1559,7 @@
       ctx = this.context;
       ctx.save();
 
-      hud = that.APP_CONFIG.hud;
+      hud = this.owner.APP_CONFIG.hud;
 
       // Clear the top and bottom 'transparent' information areas
       ctx.clearRect(0, 0, ctx.canvas.width, hud.headline.height);
@@ -1317,8 +1583,8 @@
 
       segWidths = {};
       // TODO: IDEA: change the time label colour (style) based on time remaining
-      // stl = styleCalc(that.currentSettings.levelTime, that.elapsedTimes.level);
-      // green>>yellow>>red
+      // stl = styleCalc(this.owner.currentSettings.levelTime,
+      // this.owner.elapsedTimes.level);// green>>yellow>>red
       segWidths.time = placeLabel.call(ctx, hud.labels.time, hud.headline.baseY);
       segWidths.level = placeLabel.call(ctx, hud.labels.level,
         hud.headline.baseY
@@ -1338,18 +1604,18 @@
       ctx.font = hud.headline.valuesfont;
       ctx.fillStyle = hud.values.style;
 
-      tm = that.currentSettings.levelTime - that.elapsedTimes.level;
+      tm = this.owner.currentSettings.levelTime - this.owner.elapsedTimes.level;
       tmStr = Number(tm).toFixed(1);
       //zfStr = (tm < 99.5) ? ('00' + tmStr).slice(-4) : tmStr;//leading zeros
       placeValue.call(ctx, tmStr, hud.values.time,
         hud.labels.time.left + segWidths.time,
         hud.labels.level.left, hud.headline.baseY
         );
-      placeValue.call(ctx, that.level, hud.values.level,
+      placeValue.call(ctx, this.owner.level, hud.values.level,
         hud.labels.level.left + segWidths.level,
         hud.labels.score.left, hud.headline.baseY
         );
-      placeValue.call(ctx, that.score, hud.values.score,
+      placeValue.call(ctx, this.animation.score.displayScore, hud.values.score,
         hud.labels.score.left + segWidths.score,
         ctx.canvas.width, hud.headline.baseY
         );
@@ -1378,7 +1644,7 @@
       } else {
         // No message is currently being scrolled, so show that 'static' data
         ctx.font = hud.statusline.valuesfont;
-        placeValue.call(ctx, that.lives, hud.values.lives,
+        placeValue.call(ctx, this.owner.lives, hud.values.lives,
           hud.labels.lives.left + segWidths.lives,
           ctx.canvas.width, hud.statusline.baseY + ctx.canvas.height
           );
@@ -1531,8 +1797,25 @@
      *     length {Number}    The actual length of time (seconds) allowed to
      *                        complete the level (without dieing)
      *     sizeFactor {Number} The collision size fraction of avatar tile size
+     *     reward {Object}    Per level reward bonus settings
+     *       {reward_property} {Object} Bonus information for 'doing' 'property'
+     *         score {Integer} Add to current score
+     *         time {Integer} Add to time remaining for current level
+     *         lives {Integer} Add to number of lives remaining
+     *         speed {Number} ?factor?time? to slow down enemies
+     *         delta {Object} Adjustment amount for {scoreProperty values}
+     *     goal {Array or Object} Conditions for reaching goal (avatar position)
+     *       {each Object}    One possible goal condition
+     *         row {Integer}  Being on specific playing grid row, AND
+     *         cols {Array of Integer} Being on any specified grid column
+     *     prizes {Object}    Information about which/when/where prizes to show
+     *       delta {Object}   (Cumulative) change from previous levels
      *     delta {Object}     Values to adjust from previous level settings
      *       length {Number}  Change from previous level length
+     * {reward_property} {Object}
+     *   goal                 Finish the level before time runs out
+     *   timeleft             Per second bonus for time remaining @level end
+     *   {sprite_url}         Picking up a prize sprite
 
      * hud {Object}
      *   headline {Object}    Configuration for drawing text at canvas top
@@ -1570,7 +1853,12 @@
      *       margin {Object}  Margins to use when drawing the value
      *         left {Integer} Left margin
      *         right {Integer} Right margin
-     *
+     *   animation {Object}   Configuration for animations on the hud
+     *     score {object}     Parameters to control the speed of score changes
+     *      coasting {Number} Remaining time (@current speed) when accel stops
+     *      acceleration {Number} How fast (* delta time) to increase speed
+     *      turnover {Number} Remaining time (@coasting speed) to start decel
+     *      landing {Number}  Deceleration time for getting to zero velocity
      */
     this.APP_CONFIG = {
       "enemy" : {
@@ -1665,13 +1953,55 @@
         "levels" : [
           {
             "length" : 10,
-            "sizeFactor" : 0.6,
+            "sizeFactor" : 0.5,
+            "rewards" : {
+              "goal" : {
+                "score" : 100
+              },
+              "timeleft" : {
+                "score" : 10
+              },
+              "images/Key.png" : {
+                "score" : 5
+              },
+              "images/Gem Blue.png" : {
+                "score" : 20
+              },
+              "images/Gem Green.png" : {
+                "score" : 40
+              },
+              "images/Gem Orange.png" : {
+                "score" : 60
+              },
+              "images/Heart.png" : {
+                "lives" : 1
+              },
+              "images/Rock.png" : {
+                "speed" : 0.5
+              },
+              "images/Star.png" : {
+                "time" : 10
+              }
+            },
             "goal" : [
               {
                 "row" : 0,
                 "cols" : [0, 1, 2, 3, 4]
               }
-            ]
+            ],
+            "prizes" : {}
+          },
+          {
+            "rewards" : {
+              "goal" : {
+                "delta" : {
+                  "score" : 5
+                }
+              }
+            },
+            "delta" : {
+              "sizeFactor" : 0.1
+            }
           }
         ]
       },
@@ -1774,6 +2104,14 @@
               "right" : 10
             }
           }
+        },
+        "animation" : {
+          "score" : {
+            "acceleration" : 30,
+            "coasting" : 1.6,
+            "turnover" : 1.2,
+            "landing" : 1.5
+          }
         }
       }
     };// ./APP_CONFIG = {}
@@ -1796,7 +2134,7 @@
       "player" : {},
       "enemy" : {}
     };
-    this.tracker = new PaceCar();
+    this.tracker = new PaceCar(this);
 
     console.log((new Date()).toISOString() + ' waiting for engineReady');
     // Setup a callback, so that details can be filled in when the Animation
@@ -1816,7 +2154,7 @@
    * NOTE: In some situations, the calculated index will be for a sprite that
    * has already moved off of the visible canvas, and is ready to be recycled.
    *
-   * @param {Integer} row     The row (index) number to locate the sprite in
+   * @param {Integer} row       The row (index) number to locate the sprite in
    * @return {Integer}
    */
   Frogger.prototype.lastVisible = function (row) {
@@ -1831,7 +2169,7 @@
   /**
    * Include one recycled sprite into the active portion of the circular buffer
    *
-   * @param {Integer} row     The row (index) number to locate the sprite in
+   * @param {Integer} row       The row (index) number to locate the sprite in
    * @return {undefined}
    */
   Frogger.prototype.addSprite = function (row) {
@@ -1861,7 +2199,7 @@
   /**
    * Cycle through the circular buffer of distances for the active pattern
    *
-   * @param {Integer} row     The row (index) number the distances are for
+   * @param {Integer} row       The row (index) number the distances are for
    * @return {Integer}
    */
   Frogger.prototype.nextDistance = function (row) {
@@ -1885,7 +2223,7 @@
   /**
    * Remove the sprite from the head of the circular buffer
    *
-   * @param {Integer} row     The row (index) number to the sprite is on
+   * @param {Integer} row       The row (index) number to the sprite is on
    * @return {undefined}
    */
   Frogger.prototype.recycleSprite = function (row) {
@@ -1907,7 +2245,7 @@
   /**
    * Handle a player requested command
    *
-   * @param {Object} request   The request to be processed
+   * @param {Object} request    The request to be processed
    * @return {undefined}
    */
   Frogger.prototype.handleCommand = function (request) {
@@ -1941,7 +2279,7 @@
    *
    * @return {undefined}
    */
-  Frogger.prototype.initPatterns = function () {
+  Frogger.prototype.clearEnemyPatterns = function () {
     var row, sprite;
 
     delete this.currentPatterns;
@@ -1967,14 +2305,14 @@
       this.enemySprites[row][0].position.x = this.limits.offRightX;
     }// ./for (row = 0; row < this.APP_CONFIG.enemy.maxSprites.length; row += 1)
 
-  };// /.function Frogger.prototype.initPatterns()
+  };// /.function Frogger.prototype.clearEnemyPatterns()
 
   /**
    * Update and load the application (game) level settings
    *
    * @return {undefined}
    */
-  Frogger.prototype.initSettings = function () {
+  Frogger.prototype.loadSettings = function () {
     var gamConfig, lvlConfig;
     gamConfig = this.APP_CONFIG.game.levels[this.lvlIndex];
     lvlConfig = this.APP_CONFIG.enemy.levels[this.lvlIndex];
@@ -1994,12 +2332,14 @@
         this.currentSettings.goal = gamConfig.goal;
       }
     }// ./if (gamConfig !== undefined)
+    // Update the reward rules/configuration for the level
+    nestedConfigUpdate.call(gamConfig, this.currentSettings, 'rewards');
 
     // lvlConfig needs to always exist.  The pattern information is complex
     // enough to make cloning and modifying from previous levels 'problematic'
     this.currentSettings.enemy.sizeFactor = configUpdate.
       call(lvlConfig, this.currentSettings.enemy.sizeFactor, 'sizeFactor');
-  };// /.function Frogger.prototype.initSettings()
+  };// /.function Frogger.prototype.loadSettings()
 
   /**
    * Set the initial game state for the start of a level
@@ -2011,8 +2351,8 @@
   Frogger.prototype.initLevel = function () {
     console.log((new Date()).toISOString() + ' reached Frogger.initLevel');
 
-    this.initPatterns();
-    this.initSettings();
+    this.clearEnemyPatterns();
+    this.loadSettings();
 
     // Calculation level specific collision detection parameters
     // Assumptions:
@@ -2032,12 +2372,106 @@
   };// ./function Frogger.prototype.initLevel()
 
   /**
+   * Stop all enemies
+   *
+   * Set the sprite speed to zero for all enemies in each of the (row) circular
+   * buffers.  Since the buffer updates are based on position, and pattern
+   * changes are based on elapsed level time, that should freeze all enemies in
+   * place until a state change re-initializes the patterns.
+   *
+   * @return {undefined}
+   */
+  Frogger.prototype.freezeEnemies = function () {
+    var row, sprite, inBuffer;
+    for (row = 0; row < this.APP_CONFIG.enemy.maxSprites.length; row += 1) {
+      // For each row occupied by moving enemies
+      sprite = this.currentPatterns[row].head;// The 'front' sprite in the row
+      inBuffer = true;
+      while (inBuffer) {
+        this.enemySprites[row][sprite].speed = 0;// Stop the sprite
+
+        if (sprite === this.currentPatterns[row].tail) {
+          inBuffer = false;// Just stopped the last sprite in the buffer
+        } else {// !(sprite === this.currentPatterns[row].tail)
+          // Move to the next active enemy in the circular buffer
+          sprite += 1;
+          if (sprite >= this.APP_CONFIG.enemy.maxSprites[row]) {
+            sprite = 0;// Wrap to the start of the buffer
+          }
+        }// ./else !(sprite === this.currentPatterns[row].tail)
+      }// ./while (inBuffer)
+    }// ./for (row = 0; row < this.APP_CONFIG.enemy.maxSprites.length; row += 1)
+  };// ./function Frogger.prototype.freezeEnemies()
+
+  /**
+   * Collect any / all bonuses for a single reward case
+   *
+   * @param {string} reward     The key for the reward won
+   * @return {undefined}
+   */
+  Frogger.prototype.collectReward = function (reward, multiplier) {
+    var rwdObj, bonus, bonusValue;
+    rwdObj = this.currentSettings.rewards[reward];
+    // Redundant? validation (if no recovery); will fail looking for properties
+    // if (!rwdObj) {
+    //   throw new Error('No known bonus for "' + reward + '" reward');
+    // }
+
+    for (bonus in rwdObj) {
+      if (rwdObj.hasOwnProperty(bonus)) {
+        // For each local (Own) bonus associated with the reward
+        bonusValue = rwdObj[bonus];
+        switch (bonus) {
+        case ENUMS.BONUS.score:
+          this.score += Math.round(bonusValue * (multiplier || 1));
+          break;
+        case ENUMS.BONUS.lives:
+          this.lives += bonusValue;
+          break;
+        case ENUMS.BONUS.time:
+          this.elapsedTimes.level -= bonusValue;
+          break;
+        case ENUMS.BONUS.speed:
+          // need a multiplier to use with sprite speed in Enemy.update
+          // need a timer for how long it lasts
+          throw new Error('Speed reduction bonus not implemented');
+          //break;
+        default:
+          throw new Error('Unknown bonus found while collecting "' +
+            reward + '" reward');
+        }// ./select(bonus)
+      }// ./if (rwdObj.hasOwnProperty[bonus])
+    }// ./for (bonus in rwdObj)
+  };// ./function Frogger.prototype.collectReward(reward, multiplier)
+
+  /**
+   * Do end of (successful) level processing
+   *
+   * Collect end of level rewards, and create scrolling content
+   *
+   * @return {undefined}
+   */
+  Frogger.prototype.levelComplete = function () {
+    var bonusTime, tmpMsg;
+
+    //this.freezeEnemies();// Done in state transition
+    bonusTime = this.currentSettings.levelTime - this.elapsedTimes.level;
+    tmpMsg = deepCopyOf(this.APP_CONFIG.hud.statusline.templates.levelComplete);
+    tmpMsg.text = textInterpolate.call(tmpMsg.text,
+      [this.level, Number(bonusTime.toFixed(1))]);
+    this.tracker.message = tmpMsg;
+
+    this.collectReward('goal');
+    this.collectReward('timeleft', bonusTime);
+  };// ./function Frogger.prototype.levelComplete()
+
+  /**
    * Create and initialize all game entities, and finish the initial
    * configuration
    *
    * Executed when 'engineReady' event received
    *
-   * @param {Object} cvsContext    CanvasRenderingContext2D to display the
+   * @param {Object} cvsContext CanvasRenderingContext2D to display the
    *                    sprites on.
    * @return {undefined}
    */
@@ -2155,8 +2589,8 @@
       that.player.handleInput(allowedKeys[e.keyCode]);
     });
     document.addEventListener('ApplicationCommand', function (e) {
-      console.log((new Date()).toISOString() + '" caught "' +
-        e.detail.command + '" ApplicationCommand'
+      console.log((new Date()).toISOString() + ' caught ' +
+        JSON.stringify(e.detail)
         );
       // Access outer function Frogger constructor 'this' context through
       // closure scope 'that'
@@ -2179,8 +2613,8 @@
    *  Same direction as previous, new spacing and/or speed
    *  reverse direction
    *
-   * @param {Integer} rowIndex      The pattern row number
-   * @param {Number} startDistance  The distance from old to new pattern
+   * @param {Integer} rowIndex  The pattern row number
+   * @param {Number} startDistance The distance from old to new pattern
    * @return {undefined}
    */
   Frogger.prototype.initPattern = function (rowIndex, startDistance) {
@@ -2309,7 +2743,7 @@
   /**
    * Check for level completion conditions
    *
-   * @return {boolean}    Goal was reach, changing game state
+   * @return {boolean}          Goal was reached, changing game state
    */
   Frogger.prototype.goalCheck = function () {
     var goals, goal;
@@ -2339,7 +2773,7 @@
    * the playing field grid information.  Providing that would cause undesired
    * coupling with the application.
    *
-   * @return {boolean}    Went past playing field boundary
+   * @return {boolean}          Went past playing field boundary
    */
   Frogger.prototype.playerBoundsCheck = function () {
     // check for collision with game field boundaries
@@ -2361,7 +2795,7 @@
    * This only needs to check for collisions with the sprites that are in the
    * grid row currently being occupied by the avatar.
    *
-   * @return {boolean}    Collided, and game state changing
+   * @return {boolean}          Collided, and game state changing
    */
   Frogger.prototype.playerEnemyCheck = function () {
     var enIdx, enRow, avHalfWidth, enHalfWidth, enemy;
@@ -2417,7 +2851,7 @@
    * concerned.  Offsets are used for visual adjustments, but do not affect
    * the location for vertical positioning.
    *
-   * @return {boolean}    Was state changing collision detected?
+   * @return {boolean}          Was state changing collision detected?
    */
   Frogger.prototype.collisionCheck = function () {
     // check for collision with 'prize' sprites
@@ -2425,6 +2859,7 @@
        moving past the goal line. */
     //TODO: if (this.player.row <= this.APP_CONFIG.game.start.row)
     // This does NOT change game state, so do not return anything yet
+    // this.collectReward(collision.sprite);
 
     // check for collision with 'goal'; check for success before check for fail
     if (this.goalCheck()) { return true; }// goal line collision
@@ -2457,6 +2892,9 @@
       this.player.resurrect();//NOTE: currently just a stub
       this.initLevel();
       break;
+    case ENUMS.STATE.donelevel:
+      this.levelComplete();
+      break;
     }// ./switch (this.state)
   };// ./function Frogger.prototype.startState()
 
@@ -2465,7 +2903,7 @@
    *
    * NOTE: conceptually done at 'pre-update'
    *
-   * @param {Number} deltaTime    (Fractional) seconds since previous update
+   * @param {Number} deltaTime  (Fractional) seconds since previous update
    * @return {undefined}
    */
   Frogger.prototype.next = function (deltaTime) {
@@ -2516,8 +2954,8 @@
     //       waiting to be recycled.
   };// ./function Frogger.prototype.next(deltaTime)
 
-  /** TODO: move the config structure description to engine.js, keep only the
-   *  specifics for the current application here
+  /** TODO: move the game board config structure description to engine.js, keep
+   *  only the specifics for the current application here
    * Structure:
    *  canvas : {Object}
    *    information about the application graphical interface to be managed by
