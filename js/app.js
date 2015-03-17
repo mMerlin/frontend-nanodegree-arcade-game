@@ -164,10 +164,9 @@
    * NOTE: Memory says that some browsers (versions?) show 'object' for
    * typeof function, but I found no references.
    *
-   * NOTE: This has not been tested with either arrays or regex objects.  Arrays
-   * are being explicitly checked for, but that code block has not been verified.
-   * Regex is documented as being detected as an object, but it is not known
-   * whether standard object processing will properly clone it.
+   * NOTE: This has not been tested with regex objects.  Regex is documented as
+   * being detected as an object, but it is not known whether standard object
+   * processing will properly clone it.
    *
    * @param {object} obj        The object to (deep) copy
    * @returns {object}
@@ -182,11 +181,7 @@
     // Now for the 'hard' part.  Building a copy of an object.
 
     if (obj instanceof Array) {
-      // untested array processing code here
-      copiedObj = Object.create(obj.constructor.prototype);
-      // copiedObj = [];
-      // copiedObj.prototype = Object.create(obj.prototype);
-      // copiedObj.prototype.constructor = obj.prototype.constructor;
+      copiedObj = new obj.constructor();
       for (k = 0; k < obj.length; k += 1) {
         copiedObj.push(deepCopyOf(obj[k]));
       }
@@ -944,12 +939,12 @@
   };// ./function Avatar.prototype.resurrect()
 
 
-  /////////////////////////////////////////////
-  // Create Gem (pseudoclassical) [sub]Class //
-  /////////////////////////////////////////////
+  ///////////////////////////////////////////////
+  // Create Prize (pseudoclassical) [sub]Class //
+  ///////////////////////////////////////////////
 
   /**
-   * Gem (prize) class constructor function
+   * Prize class constructor function
    *
    * A Pseudoclassical subClass (of Enemy) to hold information about a reward
    * target that will be placed and managed as part of the application (game).
@@ -961,54 +956,54 @@
    * @param {Array of string} tiles Icon URLs to select from
    * @param {Object} cvsContext The CanvasRenderingContext2D to display the
    *                    sprite on
-   * @return {Object}           Gem instance
+   * @return {Object}           Prize instance
    */
-  function Gem(vOffset, hOffset, gridCell, tiles, cvsContext) {
+  function Prize(vOffset, hOffset, gridCell, tiles, cvsContext) {
     Enemy.call(this, null, 0, vOffset, undefined, cvsContext, gridCell);
 
     this.tiles = tiles;
     this.colOffset = hOffset;
     this.col = -1;
     this.timeToLive = 0;
-  }// ./function Gem(vOffset, hOffset, gridCell, tiles, cvsContext)
-  Gem.prototype = Object.create(Enemy.prototype);
-  Gem.prototype.constructor = Gem;
+  }// ./function Prize(vOffset, hOffset, gridCell, tiles, cvsContext)
+  Prize.prototype = Object.create(Enemy.prototype);
+  Prize.prototype.constructor = Prize;
 
   /**
-   * Move gem instance off canvas when remaining life expires
+   * Move prize instance off canvas when remaining life expires
    *
    * @param {Number} dt         Delta Time (since previous update) in seconds
    * @return {undefined}
    */
-  Gem.prototype.update = function (dt) {
+  Prize.prototype.update = function (dt) {
     this.timeToLive -= dt;// Life is ticking away
     if (this.timeToLive < 0) {
       // Ran out of time; move off screen where it can no longer be collided with
       this.col = -1;
     }
-  };// ./function Gem.prototype.update()
+  };// ./function Prize.prototype.update()
 
   /**
-   * Show the gem instance on the canvas
+   * Show the prize instance on the canvas
    *
    * @return {undefined}
    */
-  Gem.prototype.place = function (index, row, col, seconds) {
+  Prize.prototype.place = function (index, row, col, seconds) {
     this.sprite = this.tiles[index];
     this.row = row;
     this.col = col;
     this.timeToLive = seconds;
-  };// ./function Gem.prototype.place(index, row, col, seconds)
+  };// ./function Prize.prototype.place(index, row, col, seconds)
 
   /**
-   * Manually expire the gem, and remove it from the canvas
+   * Manually expire the prize, and remove it from the canvas
    *
    * @return {undefined}
    */
-  Gem.prototype.hide = function () {
+  Prize.prototype.hide = function () {
     this.col = -1;
     this.timeToLive = 0;
-  };// ./function Gem.prototype.hide()
+  };// ./function Prize.prototype.hide()
 
 
   ////////////////////////////////////////////
@@ -1048,6 +1043,10 @@
       "acceleration" : "acceleration",
       "coasting" : "coasting",
       "deceleration" : "deceleration"
+    },
+    "SETTINGS" : {
+      "sizeFactor" : "sizeFactor",
+      "rewards" : "rewards"
     }
   };
   // Lookup for valid state transitions: target from (one of) current)
@@ -2118,6 +2117,12 @@
         "verticalOffset" : -30,
         "horizontalOffset" : 0
       },
+      "prizes" : {
+        "tileIndex" : 7,
+        "prizeCount" : 7,
+        "verticalOffset" : 0,
+        "horizontalOffset" : 0
+      },
       "game" : {
         "levels" : [
           {
@@ -2130,16 +2135,16 @@
               "timeleft" : {
                 "score" : 10
               },
-              "images/Key.png" : {
+              "images/Gem Blue.png" : {
                 "score" : 5
               },
-              "images/Gem Blue.png" : {
+              "images/Gem Green.png" : {
                 "score" : 20
               },
-              "images/Gem Green.png" : {
+              "images/Gem Orange.png" : {
                 "score" : 40
               },
-              "images/Gem Orange.png" : {
+              "images/Key.png" : {
                 "score" : 60
               },
               "images/Heart.png" : {
@@ -2158,7 +2163,30 @@
                 "cols" : [0, 1, 2, 3, 4]
               }
             ],
-            "prizes" : {}
+            "prizes" : [
+              {
+                "condition" : {
+                  "startDelay" : 2,
+                  "chance" : {
+                    "factor" : 1,
+                    "recheck" : 99,
+                    "repeat" : false,
+                    "repeatDelay" : 99
+                  }
+                },
+                "constraints" : {
+                  "tileIndex" : 0,
+                  "minDistance" : {
+                    "total" : 1
+                  },
+                  "row" : [1],
+                  "col" : [1, 1, 1, 1, 1]
+                },
+                "time" : {
+                  "fixed" : 5
+                }
+              }
+            ]
           },
           {
             "rewards" : {
@@ -2307,14 +2335,14 @@
     this.finiteState.selectPending = false;
     this.limits = {};
     this.elapsedTimes = {};
-    this.gems = [];
-    this.gem = {
+    this.prizes = [];
+    this.pendingPrize = {
       "queued" : false,
-      "gem" : 0
-    };// No gem reward to be shown on canvas (yet)
-    // this.gem = {
+      "prize" : 0
+    };// No prize reward to be shown on canvas (yet)
+    // this.pendingPrize = {
     //   "queued" : true,
-    //   "gem" : 0,
+    //   "prize" : 0,
     //   "tileIndex" : ?,
     //   "row" : ?,
     //   "col" : ?,
@@ -2504,8 +2532,9 @@
     // the current level.
     this.currentSettings.levelTime = configUpdate.
       call(gamConfig, this.currentSettings.levelTime, 'length');
-    this.currentSettings.player.sizeFactor = configUpdate.
-      call(gamConfig, this.currentSettings.player.sizeFactor, 'sizeFactor');
+    this.currentSettings.player.sizeFactor = configUpdate.call(gamConfig,
+      this.currentSettings.player.sizeFactor, ENUMS.SETTINGS.sizeFactor
+      );
     if (gamConfig !== undefined) {
       if (gamConfig.goal) {
         // Just replace the whole array.  There does not seem to be a good (and
@@ -2514,14 +2543,25 @@
         delete this.currentSettings.goal;
         this.currentSettings.goal = gamConfig.goal;
       }
+
+      // Update the available prize rewards to use for the level
+      // nestedConfigUpdate.
+      //   call(gamConfig, this.currentSettings, ENUMS.SETTINGS.prizes);
+      if (gamConfig.prizes) {
+        delete this.currentSettings.prizes;
+        // Need copy, since (easiest) processing updates information
+        this.currentSettings.prizes = deepCopyOf(gamConfig.prizes);
+      }
     }// ./if (gamConfig !== undefined)
     // Update the reward rules/configuration for the level
-    nestedConfigUpdate.call(gamConfig, this.currentSettings, 'rewards');
+    nestedConfigUpdate.
+      call(gamConfig, this.currentSettings, ENUMS.SETTINGS.rewards);
 
     // lvlConfig needs to always exist.  The pattern information is complex
     // enough to make cloning and modifying from previous levels 'problematic'
-    this.currentSettings.enemy.sizeFactor = configUpdate.
-      call(lvlConfig, this.currentSettings.enemy.sizeFactor, 'sizeFactor');
+    this.currentSettings.enemy.sizeFactor = configUpdate.call(lvlConfig,
+      this.currentSettings.enemy.sizeFactor, ENUMS.SETTINGS.sizeFactor
+      );
   };// /.function Frogger.prototype.loadSettings()
 
   /**
@@ -2529,6 +2569,7 @@
    *
    * QUERY: Should this be a (function scope) helper function, instead of a
    *  shared prototype function? private vs possible inherit and override?
+   *
    * @return {undefined}
    */
   Frogger.prototype.initLevel = function () {
@@ -2549,7 +2590,7 @@
       this.currentSettings.enemy.sizeFactor *
       this.enemySprites[0][0].cell.width / 2;
 
-    // Move the player avatar back to the starting location
+    // Move the player avatar (back) to the starting location
     this.player.col = this.APP_CONFIG.player.start.col;
     this.player.row = this.APP_CONFIG.player.start.row;
   };// ./function Frogger.prototype.initLevel()
@@ -2707,10 +2748,10 @@
     this.player = new Avatar(cfg, cvsContext, gridCell, this
       );
 
-    // For now, just use (and reuse) a single Gem instance.  Never more than one
+    // For now, just use (and reuse) a single Prize instance.  Never more than one
     // on the canvas at a time (with current implementation)
-    // Use Avatar information to configure the gem.
-    this.gems[0] = new Gem(cfg.verticalOffset, cfg.horizontalOffset, gridCell,
+    cfg = this.APP_CONFIG.prizes;
+    this.prizes[0] = new Prize(cfg.verticalOffset, cfg.horizontalOffset, gridCell,
       tiles, cvsContext
       );
 
@@ -2935,25 +2976,26 @@
   };// ./function Frogger.prototype.refreshEnemyQueues()
 
   /**
-   * Collect rewards for any gem(s) at the avatar location
+   * Collect rewards for any prize(s) at the avatar location
    *
    * @return {undefined}
    */
-  Frogger.prototype.collectGems = function () {
-    var gem;
-    // Both gems and the avatar are (currently) constrained to stay on the grid
-    // rows and columns.
-    // Currently only a single gem, but structure to handle multiple.
-    for (gem = 0; gem < this.gems.length; gem += 1) {
-      if (this.player.row === this.gems[gem].row &&
-          this.player.col === this.gems[gem].col
+  Frogger.prototype.collectPrizes = function () {
+    var prize;
+    // Both prizes and the avatar are (currently) constrained to stay on the
+    // grid rows and columns.
+    // Currently only a single prize, but structure to handle multiple.
+    for (prize = 0; prize < this.prizes.length; prize += 1) {
+      if (this.player.row === this.prizes[prize].row &&
+          this.player.col === this.prizes[prize].col
           ) {
-        // Currently no gem rewards implemented that care about the remaining
-        // time, either the life left on the gem, or for the level.
-        this.collectReward(this.gems[gem].sprite);
+        // Currently no prize rewards implemented that care about the remaining
+        // time, either the life left on the prize, or for the level.
+        // this.collectReward(this.prizes[prize].sprite, <<timeMultipler>>);
+        this.collectReward(this.prizes[prize].sprite);
       }
     }
-  };// ./function Frogger.prototype.collectGems()
+  };// ./function Frogger.prototype.collectPrizes()
 
   /**
    * Check for level completion conditions
@@ -3069,7 +3111,7 @@
    * @return {boolean}          Was state changing collision detected?
    */
   Frogger.prototype.collisionCheck = function () {
-    this.collectGems();// No game state change for this
+    this.collectPrizes();// No game state change for this
     // check for collision with 'goal'; check for success before check for fail
     if (this.goalCheck()) { return true; }// goal line collision
     if (this.playerBoundsCheck()) { return true; }// world edge collision
@@ -3174,12 +3216,13 @@
       this.player.showSelections();
     }
 
-    // Queue next gem for display
-    if (this.gem.queued) {
-      this.gem.queued = false;
-      this.gems[this.gem.gem].
-        place(this.gem.tileIndex, this.gem.row, this.gem.col, this.gem.seconds);
-    }// ./if (this.gem.queued)
+    // Queue next prize for display
+    if (this.pendingPrize.queued) {
+      this.pendingPrize.queued = false;
+      this.prizes[this.pendingPrize.prize].place(this.pendingPrize.tileIndex,
+        this.pendingPrize.row, this.pendingPrize.col, this.pendingPrize.seconds
+        );
+    }// ./if (this.pendingPrize.queued)
   };// function Frogger.prototype.preRender()
 
   /** TODO: move the game board config structure description to engine.js, keep
