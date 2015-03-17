@@ -573,11 +573,13 @@
   function setSpeed(newSpeed) {
     /* jshint validthis: true */
     this.private.speed = newSpeed;
-    this.position.flipped = false;
     if (newSpeed < 0) {
       // need to use a horizontally flipped sprite.  Or place (done here) on
       // the canvas using a horizontally flipped coordinate system.
       this.position.flipped = true;
+    } else if (newSpeed > 0) {
+      // Leave .flipped state alone when speed = zero
+      this.position.flipped = false;
     }
     return this.private.speed;
   }// ./function setSpeed(newSpeed)
@@ -741,7 +743,6 @@
    * @return {boolean}
    */
   Enemy.prototype.isOffEnd = function () {
-    // if (this.position.flipped) {
     if (this.speed < 0) {
       return this.position.x - this.colOffset <= -this.cell.width;
     }
@@ -771,14 +772,21 @@
    * @param {Object} gridCell   Dimensions for a single cell on the grid
    * @return {Object}           Avatar instance
    */
-  function Avatar(imgRsrc, gridRow, gridCol, ofstVert, ofstHoriz, cvsContext,
-      gridCell
-      ) {
-    Enemy.call(this, imgRsrc, gridRow, ofstVert, undefined, cvsContext, gridCell);
+  function Avatar(options, cvsContext, gridCell, owner) {
+    Enemy.call(this, null, options.start.row, options.verticalOffset, undefined,
+      cvsContext, gridCell
+      );
+    this.selectorCol = 0;
     this.pendingCommand = null;
-    this.colOffset = ofstHoriz;
-    this.col = gridCol;
     this.sleeping = true;// Avatar does not respond to commands while sleeping
+
+    this.options = options;// Immutable
+    this.parent = owner;
+    this.tiles = this.parent.GAME_BOARD.canvas.resourceTiles;
+    this.sprite = this.tiles[options.tileIndex + this.selectorCol];
+    this.colOffset = options.horizontalOffset;
+    this.col = options.start.col;
+
     // Create (reusable) custom event instance.
     this.appEvent = makeCustomEvent("ApplicationCommand", {
       message : "Application Event received",
@@ -862,6 +870,51 @@
   };// ./function Avatar.prototype.update()
 
   /**
+   * Show the possible avatar selections, and highlight the current choice
+   *
+   * IDEA: 'scroll' displayed avatars when there are more than would fit on a
+   * single row.  When .col off canvas.
+   *
+   * @return {undefined}
+   */
+  Avatar.prototype.showSelections = function () {
+    var column;
+
+    // Transfer any avatar motion into selector motion
+    this.selectorCol += this.col - this.options.start.col;
+    // Wrap the selector tile around the screen / avatar list
+    if (this.selectorCol < 0) {
+      this.selectorCol = this.options.avatarCount - 1;
+    } else if (this.selectorCol >= this.options.avatarCount) {
+      this.selectorCol = 0;
+    }// ./ else if (this.selectorCol >= this.options.avatarCount)
+
+    // TODO: check this.options.avatarCount <=
+    // this.parent.GAME_BOARD.canvas.gridCols
+    // scroll/page avatars if not, maintain selection page in index calculations
+
+    // Display each selectable avatar on a separate column
+    this.row = this.options.selector.row;
+    for (column = 0; column < this.options.avatarCount; column += 1) {
+      this.col = column;
+      this.sprite = this.tiles[this.options.tileIndex + column];
+      this.render();
+    }
+
+    // Display the selector (highlight) tile over one of the avatars
+    this.col = this.selectorCol;
+    this.sprite = this.tiles[this.options.selector.tileIndex];
+    this.render();
+
+    // Setup so that the normal engine managed render will show the currently
+    // highlighted (selected) avatar
+    this.row = this.options.start.row;
+    this.col = this.options.start.col;
+    this.sprite = this.tiles[this.options.tileIndex + this.selectorCol];
+    // Do not render this here; the engine will get to it later in the frame
+  };// function Avatar.prototype.showSelections()
+
+  /**
    * Setup any 'death throes' for the Avatar
    *
    * @return {undefined}
@@ -905,7 +958,8 @@
       "gameover" : "game over",
       "resurrect" : "resurrect",
       "newlevel" : "new level",
-      "running" : "running"
+      "running" : "running",
+      "select" : "select"
     },
     "CHANGE" : {
       "never" : "Never",
@@ -930,9 +984,14 @@
   // Lookup for valid state transitions: target from (one of) current)
   // Can not populate direction in the JSON structure, since it uses constants
   // from earlier in the structure.
+  ENUMS.TRANSITIONS[ENUMS.STATE.select] = [
+    ENUMS.STATE.gameover,
+    ENUMS.STATE.newlevel
+  ];
   ENUMS.TRANSITIONS[ENUMS.STATE.waiting] = [
     ENUMS.STATE.newlevel,
-    ENUMS.STATE.resurrect
+    ENUMS.STATE.resurrect,
+    ENUMS.STATE.select
   ];
   ENUMS.TRANSITIONS[ENUMS.STATE.dieing] = [
     ENUMS.STATE.running
@@ -1006,6 +1065,48 @@
   }// ./function getState()
 
   /**
+   * Transition to ENUMS.STATE.newlevel state
+   *
+   * Must be run in the context (this) of the Frogger instance
+   *
+   * @return {undefined}
+   */
+  function setStateNewlevel() {
+    /* jshint validthis: true */
+    if (this.resetGame) {
+      this.resetGame = false;
+      this.lvlIndex = -1; //So increment will get to level 0 (displayed as 1)
+    }
+    this.lvlIndex += 1;
+    this.elapsedTimes.level = 0;
+    if (this.lvlIndex === 0) {
+      // Start of (new) game
+      this.lives = this.APP_CONFIG.player.start.lives;
+      this.score = 0;
+    }
+    // TODO: handle (better) if this.lvlIndex >= max configured levels
+    if (this.lvlIndex >= this.APP_CONFIG.enemy.levels.length) {
+      console.log((new Date()).toISOString() + ' Throwing game broken');
+      this.finiteState.lock = false;
+      throw new Error('Game broken, no level ' + this.level + ' configuration');
+    }
+
+    // Set timeout value (for the state), then switch to running?
+    // TODO: setup counter to force delay before (eventually) getting to
+    // running state, to allow the sprites to 'fill' each of the rows.  This
+    // is less than the (slowest) time to traverse a complete row by the
+    // final (pattern) separation distance (divided by speed)
+    // each row: canvas (width / speed) - (distance[-1] / speed)
+    if (this.finiteState.selectPending) {
+      this.finiteState.next = ENUMS.STATE.select;
+    } else {
+      this.finiteState.next = ENUMS.STATE.waiting;
+    }
+    this.finiteState.changeOn = ENUMS.CHANGE.now;
+    this.finiteState.doCurrent = true;
+  }// ./function setStateNewlevel()
+
+  /**
    * Change the application state, and update dependant properties. to match
    *
    * Frogger class state property setter function
@@ -1019,7 +1120,7 @@
    * @return {string}
    */
   function setState(newState) {
-    /* jshint validthis: true, maxcomplexity: 16 */
+    /* jshint validthis: true, maxcomplexity: 15 */
     var lockStatus, tmpMsg;
     lockStatus = this.finiteState.lock;
     this.finiteState.lock = true;
@@ -1057,40 +1158,13 @@
       break;
 
     case ENUMS.STATE.newlevel:
-      if (this.resetGame) {
-        this.resetGame = false;
-        this.lvlIndex = -1; //So increment will get to level 0 (displayed as 1)
-      }
-      this.lvlIndex += 1;
-      this.elapsedTimes.level = 0;
-      if (this.lvlIndex === 0) {
-        // Start of (new) game
-        this.lives = this.APP_CONFIG.player.start.lives;
-        this.score = 0;
-      }
-      // TODO: handle (better) if this.lvlIndex >= max configured levels
-      if (this.lvlIndex >= this.APP_CONFIG.enemy.levels.length) {
-        console.log((new Date()).toISOString() + ' Throwing game broken');
-        this.finiteState.lock = false;
-        throw new Error('Game broken, no level ' + this.level + ' configuration');
-      }
-
-      // Set timeout value (for the state), then switch to running?
-      // TODO: setup counter to force delay before (eventually) getting to
-      // running state, to allow the sprites to 'fill' each of the rows.  This
-      // is less than the (slowest) time to traverse a complete row by the
-      // final (pattern) separation distance (divided by speed)
-      // each row: canvas (width / speed) - (distance[-1] / speed)
-      this.finiteState.next = ENUMS.STATE.waiting;
-      this.finiteState.changeOn = ENUMS.CHANGE.now;
-      this.finiteState.doCurrent = true;
+      setStateNewlevel.call(this);
       break;
 
     case ENUMS.STATE.dieing:
       this.freezeEnemies();
       tmpMsg = deepCopyOf(this.APP_CONFIG.hud.statusline.templates.died);
-      tmpMsg.text = tmpMsg.text.
-        replace('{1}', this.reason);
+      tmpMsg.text = tmpMsg.text.replace('{1}', this.reason);
       this.tracker.message = tmpMsg;
 
       if (this.elapsedTimes.level > this.currentSettings.levelTime) {
@@ -1126,6 +1200,16 @@
       this.finiteState.changeOn = ENUMS.CHANGE.now;
       break;
 
+    case ENUMS.STATE.select:
+      // Select an avatar image, on initial start, or between games
+      this.finiteState.selectPending = false;
+      this.player.sleeping = false;
+      this.tracker.message =
+        this.APP_CONFIG.hud.statusline.templates.selectAvatar;
+      this.finiteState.next = ENUMS.STATE.waiting;
+      this.finiteState.changeOn = ENUMS.CHANGE.trigger;
+      break;
+
     case ENUMS.STATE.gameover:
       // Game over from dieing too many times
       this.resetGame = true;
@@ -1146,6 +1230,10 @@
     switch (this.finiteState.current) {
     case ENUMS.STATE.running:
       // State changing away from running, put the player to sleep
+      this.player.sleeping = true;
+      break;
+    case ENUMS.STATE.select:
+      // State changing away from select, put the player to sleep
       this.player.sleeping = true;
       break;
     }// ./switch (this.finiteState.current)
@@ -1556,6 +1644,8 @@
         this.fillText(val, placeX, yPos, maxWidth);
       }// ./function placeValue(val, desc, prev, next, yPos)
 
+      this.owner.preRender();
+
       ctx = this.context;
       ctx.save();
 
@@ -1738,7 +1828,7 @@
      *
 
      * enemy {Object}
-     *   spriteTile {string}  URL / resource key for all(?) enemy icons
+     *   tileIndex {Integer}  Icon index in GAME_BOARD.canvas.resourceTiles
      *   vertialOffset {Integer} Offset (pixels) to align to playing field grid
      *   maxSprites {Array}   Maximum number of enemy sprites that will be
      *                        needed simultaneously for each row.  This includes
@@ -1784,12 +1874,17 @@
      *     startDistance {Number} Change from previous pattern startDistance
      *     speed {Integer}    Change from previous pattern speed
      *     distance {Array of Number} Changes to previous pattern distances
+
      * player {Object}        Configuration information for player avatar
-     *   spriteTile {string}  URL for (initial) player avatar sprite
+     *   tileIndex            GAME_BOARD.canvas.resourceTiles index first avatar
+     *   tileCount            Number of avatar icons available (after selector)
      *   start {Object}       Player settings for the start of game and level
      *     row {Integer}      The grid row to start from for each level
      *     col {Integer}      The grid column to start from for each level
      *     lives {Integer}    The number of lives at the start of the game
+     * selector {Object}      Configuration information for avatar selection
+     *   tileIndex            GAME_BOARD.canvas.resourceTiles index for highlight
+     *   row {Integer}        The grid row to display selections on
 
      * game {Object}
      *   levels {Array}       One {Object} entry per game level
@@ -1862,7 +1957,7 @@
      */
     this.APP_CONFIG = {
       "enemy" : {
-        "spriteTile" : "images/enemy-bug.png",
+        "tileIndex" : 0,
         "verticalOffset" : -20,
         "maxSprites" : [3, 4, 4],
         "topRow" : 1,
@@ -1940,7 +2035,12 @@
         }
       },
       "player" : {
-        "spriteTile" : "images/char-boy.png",
+        "tileIndex" : 1,
+        "avatarCount" : 5,
+        "selector" : {
+          "tileIndex" : 6,
+          "row" : 4
+        },
         "start" : {
           "row" : 5,
           "col" : 2,
@@ -2046,6 +2146,13 @@
               "style" : "red",
               "repeat" : false,
               "changestate" : true
+            },
+            "selectAvatar" : {
+              "text" : "Select Avatar using arrow keys, SPACE to accept",
+              "speed" : -30,
+              "style" : "red",
+              "repeat" : true,
+              "gap" : 150
             }
           }
         },
@@ -2128,6 +2235,7 @@
     });
 
     this.finiteState = {};
+    this.finiteState.selectPending = false;
     this.limits = {};
     this.elapsedTimes = {};
     this.currentSettings = {
@@ -2258,15 +2366,7 @@
       }
       break;
     }
-    /* TODO: Implement other command processing
-     * Before game start
-     * - ? waiting and previous newlevel?
-     * - up|down (request) select avatar sprite
-     *   - this.finiteState.saveState = this.finiteState.current
-     *   - this.state = ENUMS.STATE.select
-     *   - left|right previous|next avatar sprite
-     *   - select highlighted sprite (and exit)
-     * TODO: more commands? specific (per) states? callbacks that live beyond
+     /* TODO: more commands? specific (per) states? callbacks that live beyond
      *     the state that set them up?
      * switchKey = this.finiteSate.current + '|' + request.command
      */
@@ -2476,7 +2576,7 @@
    * @return {undefined}
    */
   Frogger.prototype.start = function (cvsContext) {
-    var that, gridCell, cfg, row, sprite, rowSprites;
+    var that, gridCell, cfg, tiles, row, sprite, rowSprites;
     console.log((new Date()).toISOString() + ' reached Frogger.start');
 
     // Create a function closure scope tag to allow the inner functions to get
@@ -2495,12 +2595,13 @@
      */
     gridCell = app.game.GAME_BOARD.canvas.cellSize;
     cfg = this.APP_CONFIG.enemy;
+    tiles = this.GAME_BOARD.canvas.resourceTiles;
     this.enemySprites = [];
     for (row = 0; row < cfg.maxSprites.length; row += 1) {
       rowSprites = [];
       for (sprite = 0; sprite < cfg.maxSprites[row]; sprite += 1) {
         rowSprites.push(
-          new Enemy(cfg.spriteTile, row + cfg.topRow,
+          new Enemy(tiles[cfg.tileIndex], row + cfg.topRow,
             cfg.verticalOffset, 0, cvsContext, gridCell
             )
         );
@@ -2516,8 +2617,11 @@
     this.limits.offRightX = this.enemySprites[0][0].position.x;
 
     cfg = this.APP_CONFIG.player;
-    this.player = new Avatar(cfg.spriteTile, cfg.start.row, cfg.start.col,
-      cfg.verticalOffset, cfg.horizontalOffset, cvsContext, gridCell
+    if (cfg.avatarCount > 1) {
+      // Setup to transition to 'select' state after level initialized
+      this.finiteState.selectPending = true;
+    }
+    this.player = new Avatar(cfg, cvsContext, gridCell, this
       );
 
     // Fill in the CanvasRenderingContext2D for the tracker.
@@ -2932,8 +3036,9 @@
     // Check for level time limit exceeded
     if (this.elapsedTimes.level > this.currentSettings.levelTime) {
       // Time has expired for the current level.  Avatar dies (from exposure)
-      this.reason = 'from exposure @' + this.elapsedTimes.level + ' on level ' +
-          this.level + ', with limit of ' + this.currentSettings.levelTime;
+      this.reason = 'from exposure @' +
+        Number(this.elapsedTimes.level).toFixed(1) + ' on level ' +
+        this.level + ', with limit of ' + this.currentSettings.levelTime;
       this.state = ENUMS.STATE.dieing;
       return;
       // No point in adjusting patterns or enemies while dieing.  They are going
@@ -2953,6 +3058,17 @@
     //     - probably needs cleanup pass, so do not end up with multiple sprites
     //       waiting to be recycled.
   };// ./function Frogger.prototype.next(deltaTime)
+
+  /**
+   * Per frame processing just before the tracker renders the HUD
+   *
+   * @return {undefined}
+   */
+  Frogger.prototype.preRender = function () {
+    if (this.state === ENUMS.STATE.select) {
+      this.player.showSelections();
+    }
+  };// function Frogger.prototype.preRender()
 
   /** TODO: move the game board config structure description to engine.js, keep
    *  only the specifics for the current application here
