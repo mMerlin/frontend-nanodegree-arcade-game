@@ -760,16 +760,18 @@
    * A Pseudoclassical subClass (of Enemy) to hold information about a player
    * avatar that will be placed and managed as part of the application (game).
    *
-   * @param {string} imgRsrc    URL for the image file, which in this context
-   *                    is the key to the cached image resource.
-   * @param {Integer} gridRow   The logical grid row for the instance
-   * @param {Integer} gridCol   The logical grid column for the instance
-   * @param {Integer} ofstVert  The vertical (pixel) offset from the grid row
-   * @param {Integer} ofstHoriz The horizontal (pixel) offset from the grid
+   * @param {Object} options    Object with Avatar instance setup properties:
+   *   {Integer} start.row      The logical grid row for the instance
+   *   {Integer} start.col      The logical grid column for the instance
+   *   {Integer} verticalOffset The vertical (pixel) offset from the grid row
+   *   {Integer} horizontalOffset The horizontal (pixel) offset from the grid
    *                            column
+   *   {Integer} tileIndex      Index into resource tiles for (first) sprite icon
    * @param {Object} cvsContext The CanvasRenderingContext2D to display the
    *                    sprite on.
    * @param {Object} gridCell   Dimensions for a single cell on the grid
+   * @param {Object} owner      Reference to owner/parent context
+   *   {Array} GAME_BOARD.canvas.resourceTiles Icon URLs
    * @return {Object}           Avatar instance
    */
   function Avatar(options, cvsContext, gridCell, owner) {
@@ -940,6 +942,73 @@
     // this.sprite = this.livingSprite;
     console.log('Avatar resurrected');
   };// ./function Avatar.prototype.resurrect()
+
+
+  /////////////////////////////////////////////
+  // Create Gem (pseudoclassical) [sub]Class //
+  /////////////////////////////////////////////
+
+  /**
+   * Gem (prize) class constructor function
+   *
+   * A Pseudoclassical subClass (of Enemy) to hold information about a reward
+   * target that will be placed and managed as part of the application (game).
+   *
+   * @param {Integer} vOffset   The vertical (pixel) offset from the grid row
+   * @param {Integer} hOffset   The horizontal (pixel) offset from the grid
+   *                    column
+   * @param {Object} gridCell   Dimensions for a single cell on the grid
+   * @param {Array of string} tiles Icon URLs to select from
+   * @param {Object} cvsContext The CanvasRenderingContext2D to display the
+   *                    sprite on
+   * @return {Object}           Gem instance
+   */
+  function Gem(vOffset, hOffset, gridCell, tiles, cvsContext) {
+    Enemy.call(this, null, 0, vOffset, undefined, cvsContext, gridCell);
+
+    this.tiles = tiles;
+    this.colOffset = hOffset;
+    this.col = -1;
+    this.timeToLive = 0;
+  }// ./function Gem(vOffset, hOffset, gridCell, tiles, cvsContext)
+  Gem.prototype = Object.create(Enemy.prototype);
+  Gem.prototype.constructor = Gem;
+
+  /**
+   * Move gem instance off canvas when remaining life expires
+   *
+   * @param {Number} dt         Delta Time (since previous update) in seconds
+   * @return {undefined}
+   */
+  Gem.prototype.update = function (dt) {
+    this.timeToLive -= dt;// Life is ticking away
+    if (this.timeToLive < 0) {
+      // Ran out of time; move off screen where it can no longer be collided with
+      this.col = -1;
+    }
+  };// ./function Gem.prototype.update()
+
+  /**
+   * Show the gem instance on the canvas
+   *
+   * @return {undefined}
+   */
+  Gem.prototype.place = function (index, row, col, seconds) {
+    this.sprite = this.tiles[index];
+    this.row = row;
+    this.col = col;
+    this.timeToLive = seconds;
+  };// ./function Gem.prototype.place(index, row, col, seconds)
+
+  /**
+   * Manually expire the gem, and remove it from the canvas
+   *
+   * @return {undefined}
+   */
+  Gem.prototype.hide = function () {
+    this.col = -1;
+    this.timeToLive = 0;
+  };// ./function Gem.prototype.hide()
 
 
   ////////////////////////////////////////////
@@ -2238,6 +2307,20 @@
     this.finiteState.selectPending = false;
     this.limits = {};
     this.elapsedTimes = {};
+    this.gems = [];
+    this.gem = {
+      "queued" : false,
+      "gem" : 0
+    };// No gem reward to be shown on canvas (yet)
+    // this.gem = {
+    //   "queued" : true,
+    //   "gem" : 0,
+    //   "tileIndex" : ?,
+    //   "row" : ?,
+    //   "col" : ?,
+    //   "seconds" : ?
+    // };
+
     this.currentSettings = {
       "player" : {},
       "enemy" : {}
@@ -2624,6 +2707,13 @@
     this.player = new Avatar(cfg, cvsContext, gridCell, this
       );
 
+    // For now, just use (and reuse) a single Gem instance.  Never more than one
+    // on the canvas at a time (with current implementation)
+    // Use Avatar information to configure the gem.
+    this.gems[0] = new Gem(cfg.verticalOffset, cfg.horizontalOffset, gridCell,
+      tiles, cvsContext
+      );
+
     // Fill in the CanvasRenderingContext2D for the tracker.
     this.tracker.context = cvsContext;
     // Fill in the (base) position for scrolling messages (bottom of canvas)
@@ -2845,6 +2935,27 @@
   };// ./function Frogger.prototype.refreshEnemyQueues()
 
   /**
+   * Collect rewards for any gem(s) at the avatar location
+   *
+   * @return {undefined}
+   */
+  Frogger.prototype.collectGems = function () {
+    var gem;
+    // Both gems and the avatar are (currently) constrained to stay on the grid
+    // rows and columns.
+    // Currently only a single gem, but structure to handle multiple.
+    for (gem = 0; gem < this.gems.length; gem += 1) {
+      if (this.player.row === this.gems[gem].row &&
+          this.player.col === this.gems[gem].col
+          ) {
+        // Currently no gem rewards implemented that care about the remaining
+        // time, either the life left on the gem, or for the level.
+        this.collectReward(this.gems[gem].sprite);
+      }
+    }
+  };// ./function Frogger.prototype.collectGems()
+
+  /**
    * Check for level completion conditions
    *
    * @return {boolean}          Goal was reached, changing game state
@@ -2958,13 +3069,7 @@
    * @return {boolean}          Was state changing collision detected?
    */
   Frogger.prototype.collisionCheck = function () {
-    // check for collision with 'prize' sprites
-    /* Check for prize collection first, so can collect when landing on it while
-       moving past the goal line. */
-    //TODO: if (this.player.row <= this.APP_CONFIG.game.start.row)
-    // This does NOT change game state, so do not return anything yet
-    // this.collectReward(collision.sprite);
-
+    this.collectGems();// No game state change for this
     // check for collision with 'goal'; check for success before check for fail
     if (this.goalCheck()) { return true; }// goal line collision
     if (this.playerBoundsCheck()) { return true; }// world edge collision
@@ -3068,6 +3173,13 @@
     if (this.state === ENUMS.STATE.select) {
       this.player.showSelections();
     }
+
+    // Queue next gem for display
+    if (this.gem.queued) {
+      this.gem.queued = false;
+      this.gems[this.gem.gem].
+        place(this.gem.tileIndex, this.gem.row, this.gem.col, this.gem.seconds);
+    }// ./if (this.gem.queued)
   };// function Frogger.prototype.preRender()
 
   /** TODO: move the game board config structure description to engine.js, keep
