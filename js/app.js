@@ -88,6 +88,7 @@
     }
     return cstEvnt;
   }// ./function makeCustomEvent(evName, evObj)
+
   /**
    * Check if the current ('this') array contains a specific element / value
    *
@@ -107,6 +108,82 @@
 
     return false;
   }// ./function arrayContains(obj)
+
+  /**
+   * Total all the values in the current ('this') array.
+   *
+   * All array elements are expected to be numeric.
+   *
+   * @returns {Number}
+   */
+  function arraySum() {
+    /* jshint validthis: true */
+    var i, sum;
+
+    sum = 0;
+    for (i = 0; i < this.length; i += 1) {
+      sum += this[i];
+    }
+
+    return sum;
+  }// ./function arraySum()
+
+  /**
+   * Zero entries in the current ('this') array that are not available for a row
+   *
+   * 'this' entries are expected to be numeric.
+   *
+   * @param {Array of Array of boolean} notAvailable ary[col][row] of flags
+   * @param {Integer} row       The row number in 'notAvailable to filter with
+   * @return {undefined}
+   */
+  function clearUnavailableColWeight(notAvailable, row) {
+    /* jshint validthis: true */
+    var col;
+    for (col = 0; col < this.length; col += 1) {
+      if (notAvailable[col][row]) {
+        this[col] = 0;
+      }
+    }// ./for (col = 0; col < this.length; col += 1)
+  }// ./clearUnavailableColWeight(notAvailable, row)
+
+  /**
+   * Zero entries in the current ('this') array that are not available for a row
+   *
+   * 'this' entries are expected to be numeric.
+   *
+   * @param {Array of Array of boolean} notAvailable ary[col][row] of flags
+   * @param {Integer} row       The row number in 'notAvailable to filter with
+   * @return {undefined}
+   */
+  function clearUnavailableRowWeight(notAvailable, col) {
+    /* jshint validthis: true */
+    var row;
+    for (row = 0; row < this.length; row += 1) {
+      if (notAvailable[col][row]) {
+        this[row] = 0;
+      }
+    }// ./for (row = 0; row < this.length; row += 1)
+  }// ./clearUnavailableRowWeight(notAvailable, row)
+
+  /**
+   * Count the number of positive value entries in the current ('this') array.
+   *
+   * All array elements are expected to be numeric.
+   *
+   * @returns {Integer}
+   */
+  function arrayCountPlus() {
+    /* jshint validthis: true */
+    var i, count;
+
+    count = 0;
+    for (i = 0; i < this.length; i += 1) {
+      if (this[i] >= 0) { count += 1; }
+    }
+
+    return count;
+  }// ./function arrayCountPlus()
 
   /**
    * Replace "{n}" markers in text string with consecutive values from array
@@ -275,13 +352,17 @@
   function deltaConfigUpdate(target) {
     /* jshint validthis: true */
     var p;
+    if (this === undefined) {
+      return; // no delta information to process
+    }
+
     for (p in this) {
       if (this.hasOwnProperty(p)) {
         // For each local (Own) property of 'this' (which is a 'delta' object)
         if (this[p] === null) {
           // delta property is null; delete the matching configuration property
           delete target[p];
-        } else if (typeof this[p] === "number") {
+        } else if (typeof this[p] === 'number') {
           // The 'normal' case; the delta is a numeric value, just add it to the
           // existing configuration value
           if (target[p] === undefined) {
@@ -289,10 +370,10 @@
             target[p] = 0;
           }
           target[p] += this[p];
-        } else {// .!(this[p] === undefined || typeof this[p] === "number")
+        } else {// .!(this[p] === undefined || typeof this[p] === 'number')
           // Odd delta, just copy the value to the configuration property
           target[p] = deepCopyOf(this[p]);
-        }// ./else !(this[p] === undefined || typeof this[p] === "number")
+        }// ./else !(this[p] === undefined || typeof this[p] === 'number')
       }// ./if (this.hasOwnProperty(p))
     }// ./for (p in this)
   }// ./function deltaConfigUpdate(target)
@@ -306,7 +387,7 @@
    */
   function nestedConfigUpdate(target, source) {
     /* jshint validthis: true */
-    var p, delta;
+    var p;
     if (this === undefined || this[source]  === undefined) {
       // Configuration object does not exist; keep current values
       return undefined;
@@ -314,13 +395,10 @@
     if (target[source] === undefined) {
       target[source] = {};
     }
-    delta = false;
     for (p in this[source]) {
       if (this[source].hasOwnProperty(p)) {
         if (typeof this[source][p] === 'object') {
-          if (p === 'delta') {
-            delta = true;// Just set flag; process any delta last
-          } else {
+          if (p !== 'delta') {
             // Recursively do updates for nested objects
             nestedConfigUpdate.
               call(this[source], target[source], p);
@@ -333,10 +411,8 @@
       }// ./if (this[source].hasOwnProperty(p))
     }// ./for (p in this[source])
 
-    if (delta) {
-      // Process the included delta information
-      deltaConfigUpdate.call(this[source].delta, target[source]);
-    }
+    // Process any included delta information
+    deltaConfigUpdate.call(this[source].delta, target[source]);
 
     return true;
   }// ./function nestedConfigUpdate(target, source)
@@ -953,7 +1029,7 @@
    * @param {Integer} hOffset   The horizontal (pixel) offset from the grid
    *                    column
    * @param {Object} gridCell   Dimensions for a single cell on the grid
-   * @param {Array of string} tiles Icon URLs to select from
+   * @param {Array of string}   tiles Icon URLs to select from
    * @param {Object} cvsContext The CanvasRenderingContext2D to display the
    *                    sprite on
    * @return {Object}           Prize instance
@@ -979,21 +1055,22 @@
     this.timeToLive -= dt;// Life is ticking away
     if (this.timeToLive < 0) {
       // Ran out of time; move off screen where it can no longer be collided with
-      this.col = -1;
+      this.hide();
     }
   };// ./function Prize.prototype.update()
 
   /**
    * Show the prize instance on the canvas
    *
+   * @param {Object} location   Object with prize location information
    * @return {undefined}
    */
-  Prize.prototype.place = function (index, row, col, seconds) {
-    this.sprite = this.tiles[index];
-    this.row = row;
-    this.col = col;
-    this.timeToLive = seconds;
-  };// ./function Prize.prototype.place(index, row, col, seconds)
+  Prize.prototype.place = function (location) {
+    this.sprite = this.tiles[location.tileIndex];
+    this.row = location.row;
+    this.col = location.col;
+    this.timeToLive = location.seconds;
+  };// ./function Prize.prototype.place(location)
 
   /**
    * Manually expire the prize, and remove it from the canvas
@@ -1333,7 +1410,7 @@
       // Only increase the elapsed level time when the application is running
       this.elapsedTimes.level += deltaTime;
     }
-  }
+  }// ./function manageTime(deltaTime)
 
   // Store the single actual instance of the application class
   froggerInstance = false;
@@ -1437,36 +1514,40 @@
       });
 
     }// ./function PaceCar(cvsContext)
-    PaceCar.prototype = Object.create(Enemy.prototype);
+    PaceCar.prototype = Object.create(Sprite.prototype);
     PaceCar.prototype.constructor = PaceCar;
 
     /**
-     * Animate score increases using standard distance equations.
+     * Handle score decreases, or no change
      *
-     * s1 = s0 + v0 × Δt + ½a × Δt²
-     * v1 = v0 + a × Δt
-     *
-     * @param {Number} deltaTime (Fractional) seconds since previous update
-     * @return {undefined}
+     * @param {Object} dat      Score display status information
+     * @return {boolean}
      */
-    PaceCar.prototype.animateScoring = function (deltaTime) {
-      var dat, prm, tune, tnDt;// Debug==tune, tnDt
-      dat = this.animation.score;
-      tune = dat.tuning;// Debug
+    PaceCar.prototype.jumpScore = function (dat) {
       if (dat.displayScore > this.owner.score) {
         // Straight jump on decrease (only expected for reset to zero)
         // TODO: could (fast) animate this too
         dat.displayScore = this.owner.score;
         dat.state = ENUMS.MOTION.static;
-        return;
+        return true;
       }// ./if (dat.displayScore > this.owner.score)
       if (dat.displayScore === this.owner.score) {
         // Check for any cleanup needed from previous??
         dat.state = ENUMS.MOTION.static;
-        return;
+        return true;
       }// ./if (dat.displayScore === this.owner.score)
+      return false;
+    };// ./function PaceCar.prototype.jumpScore(dat)
 
-      // The score is higher than displayed: Animate the increase 'spin' rate.
+    /**
+     * Handle animation initialization from static state
+     *
+     * @param {Object} dat      Score display status information
+     * @param {Number} deltaTime (Fractional) seconds since previous update
+     * @return {undefined}
+     */
+    PaceCar.prototype.scoringStatic = function (dat, deltaTime, tune) {//tune DBG
+      var prm;
       prm = this.owner.APP_CONFIG.hud.animation.score;
       if (dat.state === ENUMS.MOTION.static) {// Setup initial parameters
         dat.s1 = dat.displayScore;
@@ -1483,7 +1564,17 @@
         tune.refPoint = [];// DEBUG
         tune.animTime = 0;// DEBUG
       }// ./if (dat.state === ENUMS.MOTION.static)
+    };// ./function PaceCar.prototype.scoringStatic(dat)
 
+    /**
+     * Handle score target changes
+     *
+     * @param {Object} dat      Score display status information
+     * @return {undefined}
+     */
+    PaceCar.prototype.scoringTargetChange = function (dat, tune) {// tune 4 debug
+      var prm, tnDt;// DEBUG tnDt
+      prm = this.owner.APP_CONFIG.hud.animation.score;
       if (this.owner.score > dat.target + 0.5) {// Target changed
         // Handle both initial start, and change while animating
         tnDt = {// DEBUG
@@ -1512,7 +1603,17 @@
         tnDt.state1 = dat.state;
         tune.refPoint.push(tnDt);// Debug
       }// ./if (this.owner.score > dat.target + 0.5)
+    };// ./function PaceCar.prototype.scoringTargetChange(dat)
 
+    /**
+     * Handle score acceleration animation
+     *
+     * @param {Object} dat      Score display status information
+     * @return {undefined}
+     */
+    PaceCar.prototype.scoringAcceleration = function (dat, tune) {// tune 4 debug
+      var prm, tnDt;// DEBUG tnDt
+      prm = this.owner.APP_CONFIG.hud.animation.score;
       if (dat.state === ENUMS.MOTION.acceleration) {// Fast enough yet?
         // s1 + v1 × Δt >= s{target}
         if (dat.s1 + dat.v1 * prm.coasting >= dat.target) {
@@ -1541,7 +1642,17 @@
           tune.refPoint.push(tnDt);// Debug
         }// ./if (dat.s1 + dat.v1 * prm.coasting >= dat.target)
       }// ./if (dat.state === ENUMS.MOTION.acceleration)
+    };// ./function PaceCar.prototype.scoringAcceleration(dat)
 
+    /**
+     * Handle score coasting animation
+     *
+     * @param {Object} dat      Score display status information
+     * @return {undefined}
+     */
+    PaceCar.prototype.scoringCoasting = function (dat, tune) {// tune 4 debug
+      var prm, tnDt;// DEBUG tnDt
+      prm = this.owner.APP_CONFIG.hud.animation.score;
       if (dat.state === ENUMS.MOTION.coasting) {// change to landing?
         // s1 + v1 × Δt >= s{target}
         if (dat.s1 + dat.v1 * prm.turnover >= dat.target) {
@@ -1572,17 +1683,16 @@
           tune.refPoint.push(tnDt);// Debug
         }// ./if (dat.s1 + dat.v1 * prm.turnover >= dat.target)
       }// ./if (dat.state === ENUMS.MOTION.coasting)
+    };// ./function PaceCar.prototype.scoringCoasting(dat)
 
-      // TODO: ? check if .v1 < 0 ?
-      dat.dt += deltaTime;
-      tune.animTime += deltaTime;// Debug
-      // s1 = s0 + v0 × Δt + ½a × Δt²
-      dat.s1 = dat.s0 + dat.v0 * dat.dt +
-        dat.a * dat.dt * dat.dt / 2;
-      dat.v1 = dat.v0 + dat.a * dat.dt;// As of previous Δt
-      tune.step += 1;// Debug
-      // dat.displayScore = parseInt(Number(dat.s1).toFixed(0),10);
-      dat.displayScore = Math.round(dat.s1);
+    /**
+     * Check if the scoring animation is done, and cleanup
+     *
+     * @param {Object} dat      Score display status information
+     * @return {undefined}
+     */
+    PaceCar.prototype.scoringDoneCheck = function (dat, tune) {// tune 4 debug
+      var tnDt;// DEBUG
       if (dat.displayScore >= this.owner.score) {
         tnDt = {
           "context" : 'landed',
@@ -1607,7 +1717,40 @@
         }
         tnDt = 0;
       }// ./if (dat.displayScore >= this.owner.score)
-    };// ./function PaceCar.prototype.animateScoring = function (deltaTime)
+    };// ./function PaceCar.prototype.scoringDoneCheck(dat)
+
+    /**
+     * Animate score increases using standard distance equations.
+     *
+     * s1 = s0 + v0 × Δt + ½a × Δt²
+     * v1 = v0 + a × Δt
+     *
+     * @param {Number} deltaTime (Fractional) seconds since previous update
+     * @return {undefined}
+     */
+    PaceCar.prototype.animateScoring = function (deltaTime) {
+      var dat, tune;// Debug==tune
+      dat = this.animation.score;
+      tune = dat.tuning;// Debug
+      if (this.jumpScore(dat)) { return; }// Quick exit if no animation needed
+
+      // The score is higher than displayed: Animate the increase 'spin' rate.
+      this.scoringStatic(dat, deltaTime, tune);// DEBUG tune parameter
+      this.scoringTargetChange(dat, tune);// DEBUG tune parameter
+      this.scoringAcceleration(dat, tune);// DEBUG tune parameter
+      this.scoringCoasting(dat, tune);// DEBUG tune parameter
+
+      dat.dt += deltaTime;
+      tune.animTime += deltaTime;// Debug
+      // s1 = s0 + v0 × Δt + ½a × Δt²
+      dat.s1 = dat.s0 + dat.v0 * dat.dt +
+        dat.a * dat.dt * dat.dt / 2;
+      dat.v1 = dat.v0 + dat.a * dat.dt;// As of previous Δt
+      tune.step += 1;// Debug
+      dat.displayScore = Math.round(dat.s1);
+
+      this.scoringDoneCheck(dat, tune);// DEBUG tune parameter
+    };// ./function PaceCar.prototype.animateScoring(deltaTime)
 
     /**
      * Update game state based on the elapsed time in the animation engine
@@ -2120,7 +2263,7 @@
       "prizes" : {
         "tileIndex" : 7,
         "prizeCount" : 7,
-        "verticalOffset" : 0,
+        "verticalOffset" : -20,
         "horizontalOffset" : 0
       },
       "game" : {
@@ -2166,12 +2309,8 @@
             "prizes" : [
               {
                 "condition" : {
-                  "startDelay" : 2,
-                  "chance" : {
-                    "factor" : 1,
-                    "recheck" : 99,
-                    "repeat" : false,
-                    "repeatDelay" : 99
+                  "when" : {
+                    "base" : 2
                   }
                 },
                 "constraints" : {
@@ -2180,10 +2319,10 @@
                     "total" : 1
                   },
                   "row" : [1],
-                  "col" : [1, 1, 1, 1, 1]
+                  "col" : [1, 1, 0, 1, 1]
                 },
                 "time" : {
-                  "fixed" : 5
+                  "base" : 5
                 }
               }
             ]
@@ -2338,6 +2477,7 @@
     this.prizes = [];
     this.pendingPrize = {
       "queued" : false,
+      "checkAt" : 0,
       "prize" : 0
     };// No prize reward to be shown on canvas (yet)
     // this.pendingPrize = {
@@ -2353,7 +2493,15 @@
       "player" : {},
       "enemy" : {}
     };
-    this.tracker = new PaceCar(this);
+    // PaceCar class is currently being defined local to the Frogger constructor
+    // function, so it is not directly callable from outside, including from
+    // the Frogger class prototype functions.
+    //this.tracker = new PaceCar(this);
+    // Creating an instance reference to the constructor function makes it
+    // available, so it can be invoked from outside.  Specifically the more
+    // appropriate Frogger.prototype.start function, where the needed details
+    // are actually available.
+    this.TrackerBuilder = PaceCar;
 
     console.log((new Date()).toISOString() + ' waiting for engineReady');
     // Setup a callback, so that details can be filled in when the Animation
@@ -2519,12 +2667,150 @@
   };// /.function Frogger.prototype.clearEnemyPatterns()
 
   /**
+   * Determine a time (offset) value from a configuration object
+   *
+   * obj = { base : 0, additional : 0 }
+   *
+   * @param {Object} obj        Object with time configuration properties
+   * @return {Number}           Seconds
+   */
+  Frogger.prototype.parseTimeConfig = function (obj) {
+    if (obj === undefined) {
+      // No configuration object ==> no offset
+      return 0;
+    }
+    return (obj.base || 0) + (obj.additional || 0) * Math.random();
+  };// ./function Frogger.prototype.parseTimeConfig(obj)
+
+  /**
+   * Determine a boolean value from a configuration object
+   *
+   * obj = { occurrence : 0, limit : 0 }
+   *
+   * @param {Object} obj        Object with test configuration properties
+   * @return {boolean}
+   */
+  Frogger.prototype.parseBoolConfig = function (obj, count) {
+    if (obj === undefined) {
+      // No configuration object ==> always
+      return true;
+    }
+    return (obj.occurrence || 0) * count + Math.random() < obj.limit;
+  };// ./function Frogger.prototype.parseBoolConfig(obj, count)
+
+  /**
+   * Prep the prize rule information
+   *
+   * @param {boolean} cleanup   Need full cleanup of previous prize calculations
+   * @return {undefined}
+   */
+  Frogger.prototype.calculatePrizeWaits = function (cleanup) {
+    var rule, rules;
+    rules = this.currentSettings.prizes;
+
+    for (rule = 0; rule < rules.length; rule += 1) {
+      if (cleanup) {
+        rules[rule].tileIndex = null;
+        rules[rule].lifeTime = null;
+        // rules[rule].isShown = false;
+        // TODO: add more and/or cleanup
+      }
+      rules[rule].timesShown = 0;// The prize has never been display
+
+      // Determine delay time before rule could go into effect
+      rules[rule].active = false;
+      rules[rule].waitUntil = this.parseTimeConfig(rules[rule].condition.when);
+
+      // Determine if the rule will trigger (first time) for this level
+      rules[rule].show =
+        this.parseBoolConfig(rules[rule].condition.if, rules[rule].timesShown);
+      // Determine when a rule is to be rechecked after a previous failure
+      // Zero means never (0 is 'falsey')
+      rules[rule].againAt =
+        this.parseTimeConfig(rules[rule].condition.retry);
+      // TODO: check ?later? if repeat after collect?expired?
+    }// ./for (rule = 0; rule < rules.length; rule += 1)
+  };// ./function Frogger.prototype.calculatePrizeWaits(cleanup)
+
+  /**
+   * Get an index number from a configuration object
+   *
+   * @param {Object} obj        Integer index value, or Array of index weights
+   * @return {Integer}
+   */
+  Frogger.prototype.pickIndex = function (obj) {
+    var idx, runningWeight, selectPoint;
+    if (typeof obj === 'number') {
+      return obj;
+    }
+
+    runningWeight = arraySum.call(obj);
+    // if (runningWeight <= 0) {
+    //   throw new Error('total index selection weight is zero');
+    //   //return -1;
+    // }
+
+    selectPoint = Math.random() * runningWeight;
+    runningWeight = 0;
+    for (idx = 0; idx < obj.length; idx += 1) {
+      runningWeight += obj[idx];
+      if (selectPoint < runningWeight) { return idx; }
+    }
+
+    return obj.length - 1;
+  };// ./function Frogger.prototype.pickIndex(obj)
+
+  /**
+   * Find the first available prize to be shown
+   *
+   * @return {undefined}
+   */
+  Frogger.prototype.initPendingPrize = function () {
+    var rule, rules, readyWait, readyRule, testWait, testRule;
+    rules = this.currentSettings.prizes;
+
+    this.pendingPrize.showAt = 99999;// Far future time
+    this.pendingPrize.checkAt = this.pendingPrize.showAt;
+    this.pendingPrize.tileIndex = -1;
+
+    readyWait = this.pendingPrize.showAt;
+    testWait = this.pendingPrize.showAt;
+    readyRule = -1;
+    testRule = -1;
+    for (rule = 0; rule < rules.length; rule += 1) {
+      if (rules[rule].waitUntil < readyWait && rules[rule].show) {
+        readyWait = rules[rule].waitUntil;
+        readyRule = rule;
+      }
+      if (rules[rule].againAt && rules[rule].againAt < testWait) {
+        testWait = rules[rule].waitUntil;
+        testRule = rule;
+      }
+    }// ./for (rule = 0; rule < rules.length; rule += 1)
+
+    if (readyWait < testWait) {
+      rules[readyRule].active = true;
+      this.pendingPrize.showAt = readyWait;
+      this.pendingPrize.rule = readyRule;
+      this.pendingPrize.tileIndex = this.APP_CONFIG.prizes.tileIndex +
+        this.pickIndex(rules[readyRule].constraints.tileIndex);
+      this.pendingPrize.lifeTime = this.parseTimeConfig(rules[readyRule].time);
+      // Position needs to be determined when actually placed, to account for
+      // the (then) current location of the avatar
+      return;
+    }
+
+    this.pendingPrize.checkAt = testWait;// Could be 99999 and -1
+    this.pendingPrize.rule = testRule;
+  };// ./function Frogger.prototype.initPendingPrize()
+
+  /**
    * Update and load the application (game) level settings
    *
    * @return {undefined}
    */
   Frogger.prototype.loadSettings = function () {
-    var gamConfig, lvlConfig;
+    var gamConfig, lvlConfig, reusePrizes;
     gamConfig = this.APP_CONFIG.game.levels[this.lvlIndex];
     lvlConfig = this.APP_CONFIG.enemy.levels[this.lvlIndex];
 
@@ -2535,6 +2821,7 @@
     this.currentSettings.player.sizeFactor = configUpdate.call(gamConfig,
       this.currentSettings.player.sizeFactor, ENUMS.SETTINGS.sizeFactor
       );
+    reusePrizes = true;
     if (gamConfig !== undefined) {
       if (gamConfig.goal) {
         // Just replace the whole array.  There does not seem to be a good (and
@@ -2548,11 +2835,15 @@
       // nestedConfigUpdate.
       //   call(gamConfig, this.currentSettings, ENUMS.SETTINGS.prizes);
       if (gamConfig.prizes) {
+        reusePrizes = false;// No old prize calculation left to clear
         delete this.currentSettings.prizes;
         // Need copy, since (easiest) processing updates information
         this.currentSettings.prizes = deepCopyOf(gamConfig.prizes);
       }
     }// ./if (gamConfig !== undefined)
+    this.calculatePrizeWaits(reusePrizes);
+    this.initPendingPrize();
+
     // Update the reward rules/configuration for the level
     nestedConfigUpdate.
       call(gamConfig, this.currentSettings, ENUMS.SETTINGS.rewards);
@@ -2573,8 +2864,13 @@
    * @return {undefined}
    */
   Frogger.prototype.initLevel = function () {
+    var i;
     console.log((new Date()).toISOString() + ' reached Frogger.initLevel');
 
+    // Clear any prizes left from the previous run
+    for (i = 0; i < this.prizes.length; i += 1) {
+      this.prizes[i].hide();
+    }
     this.clearEnemyPatterns();
     this.loadSettings();
 
@@ -2755,8 +3051,10 @@
       tiles, cvsContext
       );
 
-    // Fill in the CanvasRenderingContext2D for the tracker.
-    this.tracker.context = cvsContext;
+    // Due to the scope of where it is currently being created, the PaceCar
+    // constructor function is not directly available from here.  The instance
+    // reference to it is though.
+    this.tracker = new this.TrackerBuilder(this, cvsContext);
     // Fill in the (base) position for scrolling messages (bottom of canvas)
     this.tracker.position.y = cvsContext.canvas.height;
     // Start the 'press space' message scrolling
@@ -2796,6 +3094,10 @@
     // to run first on any animation frame updates.  It can safely update
     // sprite information, and have the changes take effect in the same frame.
     engineNs.allEnemies.push(this.tracker);
+    // Add the prizes next, so that enemies will 'drive over' prizes
+    for (sprite = 0; sprite < this.prizes.length; sprite += 1) {
+      engineNs.allEnemies.push(this.prizes[sprite]);
+    }
     for (row = 0; row < this.APP_CONFIG.enemy.maxSprites.length; row += 1) {
       for (sprite = 0; sprite < this.APP_CONFIG.enemy.maxSprites[row];
           sprite += 1
@@ -3150,6 +3452,254 @@
   };// ./function Frogger.prototype.startState()
 
   /**
+   * Set flags in array that are less than minimum distance from reference point
+   *
+   * Distance is measured in steps, to one row and one col difference is a
+   * distance of two.
+   *
+   * @param {Array or Array of boolean} flags array[col][row] to update
+   * @param {Integer} minDistance Minimal distance from reference coordinate
+   * @param {Integer} refRow    Grid row index for reference point
+   * @param {Integer} refCol    Grid column index for reference point
+   * @return {undefined}
+   */
+  Frogger.prototype.tooCloseTotal = function (flags, minDistance, refRow,
+      refCol
+      ) {
+    var idx, col, row, maxRow, maxCol, lowRow, highRow, lowCol, highCol;
+    if (minDistance) {// Might not exist, and zero is not valid minimum distance
+      // The four straight line (horizontal and vertical) points at the total
+      maxCol = flags.length - 1;
+      maxRow = flags[0].length - 1;
+      lowRow = Math.max(0, refRow - minDistance);
+      highRow = Math.min(maxRow, refRow + minDistance);
+      lowCol = Math.max(0, refCol - minDistance);
+      highCol = Math.min(maxCol, refCol + minDistance);
+      flags[refCol][lowRow] = true;
+      flags[refCol][highRow] = true;
+      flags[lowCol][refRow] = true;
+      flags[highCol][refRow] = true;
+      for (idx = 1; idx < minDistance; idx += 1) {
+        // For each exact distance > 0 and up to the configured limit
+        for (col = 1; col < idx; col += 1) {
+          // For each column offset > 0 and up to the exact distance
+          row = idx - col;// Row offset is total distance minus column offset
+          // (up to) four coordinates match: refCol ± col, refRow ± row
+          lowRow = Math.max(0, refRow - row);
+          highRow = Math.min(maxRow, refRow + row);
+          lowCol = Math.max(0, refCol - col);
+          highCol = Math.min(maxCol, refCol + col);
+          flags[lowCol][lowRow] = true;
+          flags[lowCol][highRow] = true;
+          flags[highCol][lowRow] = true;
+          flags[highCol][highRow] = true;
+        }// ./for (col = 1; col < idx; col += 1)
+      }// ./for (idx = 1; idx < minDistance; idx += 1)
+    }// ./if (minDistance)
+  };// ./function Frogger.prototype.
+  //      tooCloseTotal(flags, minDistance, refRow, refCol)
+
+  /**
+   * Set flags in array that are less than minimum horizontal distance from
+   * reference point
+   *
+   * @param {Array or Array of boolean} flags array[col][row] to update
+   * @param {Integer} minDistance Minimal distance from reference column
+   * @param {Integer} refCol    Grid column index for reference point
+   * @return {undefined}
+   */
+  Frogger.prototype.tooCloseHorizontal = function (flags, minDistance, refCol) {
+    var loopMin, loopMax, col, row, maxRow, maxCol;
+    if (minDistance) {// Might not exist, and zero is not valid minimum distance
+      maxCol = flags.length - 1;
+      maxRow = flags[0].length - 1;
+      loopMin = Math.max(0, refCol - minDistance);
+      loopMax = Math.min(maxCol, refCol + minDistance);
+      for (col = loopMin; col <= loopMax; col += 1) {
+        for (row = 0; row <= maxRow; row += 1) {
+          flags[col][row] = true;
+        }
+      }// ./for (col = loopMin; col <= loopMax; col += 1)
+
+    }// ./if (minDistance)
+  };// ./function Frogger.prototype.tooCloseHorizontal(flags, minDistance, refCol)
+
+  /**
+   * Set flags in array that are less than minimum vertical distance from
+   * reference point
+   *
+   * @param {Array or Array of boolean} flags array[col][row] to update
+   * @param {Integer} minDistance Minimal distance from reference row
+   * @param {Integer} refRow    Grid row index for reference point
+   * @return {undefined}
+   */
+  Frogger.prototype.tooCloseVertical = function (flags, minDistance, refRow) {
+    var loopMin, loopMax, col, row, maxRow, maxCol;
+    if (minDistance) {// Might not exist, and zero is not valid minimum distance
+      maxCol = flags.length - 1;
+      maxRow = flags[0].length - 1;
+      loopMin = Math.max(0, refRow - minDistance);
+      loopMax = Math.min(maxRow, refRow + minDistance);
+      for (row = loopMin; row <= loopMax; row += 1) {
+        for (col = 0; col <= maxCol; col += 1) {
+          flags[col][row] = true;
+        }
+      }// ./for (row = loopMin; row <= loopMax; row += 1)
+    }// ./if (minDistance)
+  };// ./function Frogger.prototype.tooCloseVertical(flags, minDistance, refRow)
+
+  /**
+   * Build array of flags showing index combinations that are closer than the
+   * configured minimum distance from the the avatar.
+   *
+   * @param {Object} rules      Object with minimal distance section properties
+   * @return {Array} of {Array} of {boolean}
+   */
+  Frogger.prototype.tooClose = function (rules) {
+    var row, col, mat, aRow, aCol, maxRow, maxCol;
+    aRow = this.player.row;
+    aCol = this.player.col;
+    maxRow = this.GAME_BOARD.canvas.gridRows - 1;
+    maxCol = this.GAME_BOARD.canvas.gridCols - 1;
+    mat = [];
+    for (col = 0; col <= maxCol; col += 1) {
+      mat[col] = [];
+      for (row = 0; row <= maxRow; row += 1) {
+        mat[col][row] = false;
+      }// ./for (row = 0; row <= maxRow; row += 1)
+    }// ./for (col = 0; col <= maxCol; col += 1)
+
+    // 'Tag' locations that are closer than allowed to the avatar
+    mat[aCol][aRow] = true;
+    this.tooCloseTotal(mat, rules.total, aRow, aCol);
+    this.tooCloseHorizontal(mat, rules.horizontal, aCol);
+    this.tooCloseVertical(mat, rules.vertical, aRow);
+
+    // TODO: maybe; if (rules.ahead) {}
+    // TODO: maybe; if (rules.behind) {}
+
+    return mat;
+  };// ./function Frogger.prototype.tooClose(rules)
+
+  /**
+   * Check whether a valid prize location was found
+   *
+   * @return {boolean}
+   */
+  Frogger.prototype.checkFoundLocation = function (flags, rowFirst, colFirst,
+      rowWeights, colWeights
+      ) {
+    if (rowFirst && colFirst) {
+      if (flags[this.pendingPrize.col][this.pendingPrize.row]) {
+        console.log('avatar at fixed prize target of (' +
+           this.pendingPrize.col + ', ' + this.pendingPrize.row + ')'
+           );
+        // throw new Error('avatar at fixed prize target of (' +
+        //   this.pendingPrize.col + ', ' + this.pendingPrize.row + ')'
+        //   );
+        return false;
+      }
+    }// ./if (rowFirst && colFirst) {
+
+    if (rowWeights !== null && (rowWeights <= 0 || colWeights <= 0)) {
+      // No currently valid location for the prize
+      return false;
+    }
+
+    if (this.pendingPrize.row < 0 || this.pendingPrize.col < 0) {
+      console.log('avatar position blocked prize placement (' +
+         this.player.col + ', ' + this.player.row + ')'
+         );
+      return false;
+    }
+
+    return true;
+  };// ./function Frogger.Prototype.
+  //      checkFoundLocation(flags, rowFirst, colFirst, rowWeights, colWeights)
+
+  /**
+   * Use the rule constraints to pick a location to show the prize icon.
+   *
+   * Must call this just before making the prize visible, since part of the
+   * calculation are based on the current location of the avatar.  As a minimum,
+   * want to avoid dropping the prize right on the avatar.
+   *
+   * @return {boolean}
+   */
+  Frogger.prototype.pickPrizeLocation = function () {
+    var constraints, rowSelect, colSelect, noPrize, rowWeights, colWeights,
+      rowFirst, colFirst;
+    this.pendingPrize.row = -1;
+    this.pendingPrize.col = -1;
+    rowWeights = null;
+    colWeights = null;
+    constraints = this.currentSettings.prizes[this.pendingPrize.rule].constraints;
+    rowSelect = deepCopyOf(constraints.row);
+    colSelect = deepCopyOf(constraints.col);
+    noPrize = this.tooClose(constraints.minDistance);
+    rowFirst = typeof rowSelect === 'number';
+    colFirst = typeof colSelect === 'number';
+
+    if (!(rowFirst || colFirst)) {
+      // Neither selection is directly limited to a single index.  Check for
+      // reduced ranges after filtering for minimum distance
+      // totalRowWeight = arraySum.call(rowSelect);
+      // totalColWeight = arraySum.call(colSelect);
+      rowWeights = arrayCountPlus.call(rowSelect);
+      colWeights = arrayCountPlus.call(colSelect);
+
+      rowFirst = rowWeights === 1;
+      colFirst = colWeights === 1;
+      if (!(rowFirst || colFirst)) {
+        rowFirst = rowWeights <= colWeights;
+        colFirst = !rowFirst;
+      }
+    }// ./if (!(rowFirst || colFirst))
+
+    if (rowFirst) {
+      this.pendingPrize.row = this.pickIndex(rowSelect);
+      if (!colFirst) {
+        clearUnavailableColWeight.call(colSelect, noPrize, this.pendingPrize.row);
+      }
+      this.pendingPrize.col = this.pickIndex(colSelect);
+    } else {
+      this.pendingPrize.col = this.pickIndex(colSelect);
+      clearUnavailableRowWeight.call(rowSelect, noPrize, this.pendingPrize.col);
+      this.pendingPrize.row = this.pickIndex(rowSelect);
+    }
+
+    return this.
+      checkFoundLocation(noPrize, rowFirst, colFirst, rowWeights, colWeights);
+  };// ./function Frogger.prototype.pickPrizeLocation()
+
+  /**
+   * Add prizes to the canvas, when they are ready to go
+   *
+   * @return {undefined}
+   */
+  Frogger.prototype.showPrize = function () {
+    if (this.pendingPrize.isShowing) {
+      if (this.prizes[this.pendingPrize.prize].timeToLive <= 0) {
+        this.pendingPrize.isShowing = false;
+        // TODO: here seems to be a good place to update the pendingPrize
+        // information, making sure not to hit the expired prize (unless
+        // it repeats)
+        // refactor initPendingPrize()?
+      }
+    }
+    if (!this.pendingPrize.isShowing) {
+      if (this.pendingPrize.showAt <= this.elapsedTimes.level) {
+        if (this.pickPrizeLocation()) {
+          this.pendingPrize.queued = true;
+        }
+      //} else if (this.pendingPrize.CheckAt <= this.elapsedTimes.level) {
+        // Update pending prize information
+        // this.?updatePendingPrize?()//refactor initPendingPrize()?
+      }
+    }// ./if (!this.pendingPrize.isShowing)
+  };// ./function Frogger.prototype.showPrize()
+
+  /**
    * Game state processing to do (at the start of) each animation frame
    *
    * NOTE: conceptually done at 'pre-update'
@@ -3160,7 +3710,7 @@
   Frogger.prototype.next = function (deltaTime) {
     manageTime.call(this, deltaTime);
 
-    // Do any needed state initialization
+    // Do any needed (one time) state initialization
     this.startState();
     // Check if there are any pending state transitions.  Loop to potentially
     // process multiple (cascading) transitions.
@@ -3178,6 +3728,9 @@
       // TODO:? Any extra processing needed here?  collisionCheck() returns true
       // when state was changed: processing done by the state change code, and
       // that SHOULD leave things ready to continue normally here.
+
+      // Add any pending prize to the screen that is due
+      this.showPrize();
     }
 
     // Check for level time limit exceeded
@@ -3219,9 +3772,10 @@
     // Queue next prize for display
     if (this.pendingPrize.queued) {
       this.pendingPrize.queued = false;
-      this.prizes[this.pendingPrize.prize].place(this.pendingPrize.tileIndex,
-        this.pendingPrize.row, this.pendingPrize.col, this.pendingPrize.seconds
-        );
+      this.prizes[this.pendingPrize.prize].place(this.pendingPrize);
+      this.currentSettings.prizes[this.pendingPrize.rule].timesShown += 1;
+      // this.currentSettings.prizes[this.pendingPrize.rule].isShown = true;
+      this.pendingPrize.isShowing = true;
     }// ./if (this.pendingPrize.queued)
   };// function Frogger.prototype.preRender()
 
