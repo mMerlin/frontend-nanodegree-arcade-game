@@ -1,5 +1,11 @@
-/*jslint browser: true, devel: true, indent: 2, maxlen: 82 */
-/*global Resources, CustomEvent */
+/*jslint browser: true, devel: false, indent: 2, maxlen: 82 */
+/*global io, Resources, CustomEvent */
+/* jshint bitwise: true, curly: true, eqeqeq: true, es3: false,
+   forin: true, freeze: true, futurehostile: true, latedef: true,
+   maxcomplexity: 8, maxstatements: 35, noarg: true, nocomma: true,
+   noempty: true, nonew: true, singleGroups: true, undef: true, unused: true,
+   plusplus: true, strict: true, browser: true, devel: false
+*/
 
 /* Engine.js
  * This file provides the game loop functionality (update entities and render),
@@ -11,96 +17,114 @@
  * the screen, it may look like just that image/character is moving or being
  * drawn but that is not the case. What's really happening is the entire "scene"
  * is being drawn over and over, presenting the illusion of animation.
- *
- * This engine is available globally via the Engine variable and it also makes
- * the canvas' context (ctx) object globally available to make writing app.js
- * a little simpler to work with.
  */
 
 // Start things off when the DOM is ready.
 // The body tag must be available.
-console.log((new Date()).toISOString() + ' starting engine');
 document.addEventListener('DOMContentLoaded', function () {
   'use strict';
-  var ns, field;
-  console.log((new Date()).toISOString() + ' caught DOMContentLoaded event');
-  ns = window;// Namespace
-  /* This object holds all of the constant configuration information needed to
-   * work with the bare playing field (grid).
+  var ns, MS_PER_SECOND;
+  MS_PER_SECOND = 1000;
+  ns = io.github.mmerlin.animationEngine;
+  /**
+   * The ns.field object is to be supplied by the application.  It holds
+   * all of the constant configuration information needed to work with
+   * the bare playing field (grid).
+   *
+   * Structure:
+   *  canvasStyle {string}    css styling for created html canvas Element
+   *  gridRows : {Integer}
+   *    number of (equal height) rows the canvas is split into.
+   *  gridCols : {Integer}
+   *    number of (equal width) columns the canvas is split into.
+   *  rowImages : {Array of {row}} ==> [row1 [, row2]…]
+   *    Each entry specifies the image resources to use for a single row of the
+   *    grid for the canvas.  If there are fewer entries than grid rows, the
+   *    rows without images will be left blank.  To leave an earlier row
+   *    blank, specify null.  Extra row entries will be silently ignored.
+   *    row{n} {Array|String|null}
+   *      - null
+   *        Grid row ‘n’ on the canvas be left blank
+   *      - String (URL)
+   *        Each column of grid row ‘n’ will be drawn with the image at the URL
+   *      - Array (of Strings) ==> [col1 [, col2]…]
+   *        The columns of grid row ‘n’ will be drawn with the images from the
+   *        URLs.
+   *        If fewer URLs are specified than the grid contains, the provided
+   *        entries will be reused (cycled) as many times as needed to fill the
+   *        row.
+   *        If more URLS are specified than the grid contains, the extras will
+   *        be silently ignored.
+   *        to leave a column blank, specify null for the URL.
+   *    The images are drawn left to right, top to bottom.  Order is important
+   *    when image dimensions are greater than the grid cell dimensions, to
+   *    determine which transparent sections will show underlying data, and
+   *    which will be drawn over by a subsequent column or row.
+   *  cellSize : {Object}
+   *    dimensions for a single cell in the logical grid overlaying the canvas
+   *    height : {Integer}
+   *      The logical height (in pixels) of the grid rows.  This does not need
+   *      to be the same as the actual height of the used images, but it is used
+   *      as the relative offset when drawing to successive rows.
+   *    width : {Integer}
+   *      The logical width (in pixels of the grid columns.  This does not need
+   *      to be the same as the actual width of the used images, but it is used
+   *      as the relative offset when drawing to successive columns.
+   *  tileSize : {Object}
+   *    dimensions for a single image used to draw the grid cells.  If they are
+   *    not all the same, use the largest height from the bottom row, and the
+   *    largest width from right most column.  This affects the dimensions of
+   *    the canvas created to hold the grid.
+   *    height : {Integer}
+   *      The height (in pixels) of tile(s).
+   *    width : {Integer}
+   *      The width (in pixels of the tile(s).
+   *  padding : {Object}
+   *    The amount of extra space to leave around the content when the grid is
+   *    drawn.  The top and left padding controls the coordinates of row[0],
+   *    column[0].  The right and bottom padding is simply added to the
+   *    dimensions for the created html5 canvas element.
+   *    left : {Integer}
+   *      Pixels
+   *    top : {Integer}
+   *      Pixels
+   *    right : {Integer}
+   *      Pixels
+   *    bottom : {Integer}
+   *      Pixels
+   *  resourceTiles : {Array of String}
+   *    URLs of all of the image resources to be cached.  This should be
+   *    automatically extended to include unique URL entries from "rowImages",
+   *    but currently (unique) rowImages entries must be duplicated here
    */
-  field = {
-    numRows : 6,// in the grid structure
-    numCols : 5,
-    /* This array holds the relative URL to the image used
-     * for that particular row of the game level.
-     * IDEA: should this, or whole config structure, be supplied by app.js?
-     *   app.js is going to need much of the same constants
-     */
-    rowImages : [
-      'images/water-block.png',   // Top row is water
-      'images/stone-block.png',   // Row 1 of 3 of stone
-      'images/stone-block.png',   // Row 2 of 3 of stone
-      'images/stone-block.png',   // Row 3 of 3 of stone
-      'images/grass-block.png',   // Row 1 of 2 of grass
-      'images/grass-block.png'    // Row 2 of 2 of grass
-    ],
-    /* The height is the height of the grid cell.  The tile images are bigger,
-     * but the display order means only the top row gets the top part shown, and
-     * only the bottom row gets the bottom part of the tile shown.  The tops are
-     * all transparent, to give good edge joins between rows.
-     */
-    rowHeight : 83,// in pixels
-    colWidth : 101,
-    tileHeight : 171,// full tile image height
-    bottomPadding : 20,
-    timeScaling : 1000.0,//milliseconds per second
-    gameTiles : [
-      'images/stone-block.png',
-      'images/water-block.png',
-      'images/grass-block.png',
-      'images/enemy-bug.png',
-      'images/char-boy.png',
-      'images/char-cat-girl.png',
-      'images/char-horn-girl.png',
-      'images/char-pink-girl.png',
-      'images/char-princess-girl.png',
-      'images/Gem Blue.png',
-      'images/Gem Green.png',
-      'images/Gem Orange.png',
-      'images/Heart.png',
-      'images/Key.png',
-      'images/Rock.png',
-      'images/Selector.png',
-      'images/Star.png'
-    ]
-  };
 
   /**
    * Create a custom event with fall back that works in IE (11 at least)
    *
-   * @ @param {string} evName  The name for the custome event
-   * @ @param {Object} evObj   The properties to include in the event details.
+   * @param {string} evName     The name for the custom event
+   * @param {Object} evObj      The properties to include in the event details.
    * @returns {CustomEvent}
    */
   function makeCustomEvent(evName, evObj) {
     var cstEvnt;
-    // IE11 fails on the 'standard' new CustomEvent() with 'Ojbect doesn't
-    // support this action'.  Provide a fall back.
+    // IE11 fails on the 'standard' new CustomEvent() with "Object doesn't
+    // support this action".  Provide a fall back.
     try {
       cstEvnt = new CustomEvent(evName, { detail : evObj });
     } catch (e) {
-      cstEvnt = document.createEvent("CustomEvent");
+      cstEvnt = document.createEvent('CustomEvent');
       cstEvnt.initCustomEvent(evName, false, false, evObj);
     }
     return cstEvnt;
   }// ./function makeCustomEvent(evName, evObj)
 
-  /* start the game engin processing loop.  Another anonymous function is used
+  /* Start the game engine processing loop.  Another anonymous function is used
    * for this, but only as a convenience, to be able to pass an argument to it.
+   *
    * TODO: flatten this code: the parameter is not really needed.  Just set
    * global as a constant value, to get it in a single place.  The original
-   * 'this' value used is no longer the correct context, which is now 'document'
-   * due to using addEventListener to start things up.
+   * 'this' value previously used is no longer the correct context, which is
+   * now 'document' due to using addEventListener to start things up.
    */
   (function (global) {
     /* Predefine the variables we'll be using within this scope,
@@ -114,20 +138,22 @@ document.addEventListener('DOMContentLoaded', function () {
     canvas = doc.createElement('canvas');
     ctx = canvas.getContext('2d');
 
-    canvas.width = field.numCols * field.colWidth;
-    canvas.height = ((field.numRows - 1) * field.rowHeight) +
-      field.tileHeight + field.bottomPadding;
-    canvas.style.cssText = "border: 1px solid red; background-color: aqua;";
+    canvas.width = ns.field.gridCols * ns.field.cellSize.width;
+    canvas.height = (ns.field.gridRows - 1) * ns.field.cellSize.height +
+      ns.field.tileSize.height + ns.field.padding.bottom;
+    canvas.style.cssText = ns.field.canvasStyle;
     doc.body.appendChild(canvas);
 
     // The basic graphical environment is ready.  Let any interested parties
     // know.
-    // TODO: If the configuration information is being passed through an object
-    // created in the engine’s namespace, an event trigger will not be needed.
-    // the configuratioin object can carry the callback function.
-    rdyEvnt = makeCustomEvent("engineReady", {
-      "message" : "Canvas exists",
-      "context" : ctx
+    // Since the configuration information is being passed through an object
+    // created in the engine’s namespace, an event trigger is not REQUIRED.  A
+    // startup callback function could be provided with the configuration data.
+    // However, using the event lets the engine continue, without worrying
+    // about what the application might be doing, or how long it will take.
+    rdyEvnt = makeCustomEvent('engineReady', {
+      'message' : 'Canvas exists',
+      'context' : ctx
     });
     document.dispatchEvent(rdyEvnt);
 
@@ -139,7 +165,7 @@ document.addEventListener('DOMContentLoaded', function () {
        * requires smooth animation. Because everyone's computer processes
        * instructions at different speeds we need a constant value that
        * would be the same for everyone (regardless of how fast their
-       * computer is) - hurray time!
+       * computer is) - hurry time!
        */
       var now, dt;
       now = Date.now();
@@ -147,7 +173,7 @@ document.addEventListener('DOMContentLoaded', function () {
        * main was run.  Any timing based on dt will then be based on elapsed
        * seconds.
        */
-      dt = (now - lastTime) / field.timeScaling;
+      dt = (now - lastTime) / MS_PER_SECOND;
 
       /* Call our update/render functions, pass along the time delta to
        * our update function since it may be used for smooth animation.
@@ -171,24 +197,19 @@ document.addEventListener('DOMContentLoaded', function () {
      * game loop.
      */
     function init() {
-      console.log((new Date()).toISOString() + ' resources loaded');
       reset();
       lastTime = Date.now();
       main();
     }
 
     /* This function is called by main (our game loop) and itself calls all
-     * of the functions which may need to update entity's data. Based on how
-     * you implement your collision detection (when two entities occupy the
-     * same space, for instance when your character should die), you may find
-     * the need to add an additional function call here. For now, we've left
-     * it commented out - you may or may not want to implement this
-     * functionality this way (you could just implement collision detection
-     * on the entities themselves within your app.js file).
+     * of the functions which may need to update entity's data. To keep the
+     * engine 'generic', applications need to implement their own collision
+     * detection.  Normally that requires knowledge of what can collide,
+     * which would end up creating a dependency with the application.
      */
     update = function (dt) {
       updateEntities(dt);
-      // checkCollisions();
     };
 
     /* This is called by the update function  and loops through all of the
@@ -218,8 +239,8 @@ document.addEventListener('DOMContentLoaded', function () {
        * and, using the rowImages array, draw the correct image for that
        * portion of the "grid"
        */
-      for (row = 0; row < field.numRows; row += 1) {
-        for (col = 0; col < field.numCols; col += 1) {
+      for (row = 0; row < ns.field.gridRows; row += 1) {
+        for (col = 0; col < ns.field.gridCols; col += 1) {
           /* The drawImage function of the canvas' context element
            * requires 3 parameters: the image to draw, the x coordinate
            * to start drawing and the y coordinate to start drawing.
@@ -228,9 +249,9 @@ document.addEventListener('DOMContentLoaded', function () {
            * we're using them over and over.
            */
           ctx.drawImage(
-            Resources.get(field.rowImages[row]),
-            col * field.colWidth,
-            row * field.rowHeight
+            Resources.get(ns.field.rowImages[row]),
+            col * ns.field.cellSize.width,
+            row * ns.field.cellSize.height
           );
         }
       }
@@ -266,14 +287,8 @@ document.addEventListener('DOMContentLoaded', function () {
      * draw our game level. Then set init as the callback method, so that when
      * all of these images are properly loaded our game will start.
      */
-    console.log((new Date()).toISOString() + ' starting resource loading');
-    Resources.load(field.gameTiles);
+    Resources.load(ns.field.resourceTiles);
     Resources.onReady(init);
-
-    /* Assign the canvas' context object to the designated namespace so that
-     * developer's can use it more easily from within their app.js files.
-     */
-    // ns.ctx = ctx;
   }(window));
 
 });// ./DOMContentLoaded handler

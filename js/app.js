@@ -1,10 +1,10 @@
-/*jslint browser: true, devel: true, todo: true, indent: 2, maxlen: 82 */
+/*jslint browser: true, devel: false, todo: false, indent: 2, maxlen: 82 */
 /*global Resources, CustomEvent */
 /* jshint bitwise: true, curly: true, eqeqeq: true, es3: false,
    forin: true, freeze: true, futurehostile: true, latedef: true,
    maxcomplexity: 8, maxstatements: 35, noarg: true, nocomma: true,
    noempty: true, nonew: true, singleGroups: true, undef: true, unused: true,
-   plusplus: true, strict: true, browser: true, devel: true
+   plusplus: true, strict: true, browser: true, devel: false
 */
 
 /* app.js
@@ -78,8 +78,8 @@
    */
   function makeCustomEvent(evName, evObj) {
     var cstEvnt;
-    //IE11 fails on the 'standard' new CustomEvent() with 'Object doesn't
-    //support this action'.  Provide a fall back.
+    //IE11 fails on the 'standard' new CustomEvent() with "Object doesn't
+    //support this action".  Provide a fall back.
     try {
       cstEvnt = new CustomEvent(evName, { detail : evObj });
     } catch (e) {
@@ -216,17 +216,6 @@
     return textInterpolate.
       call(this.replace('{' + key + '}', ary[idx]), ary, idx);
   }// ./function textInterpolate(ary, lastKey)
-  // This iterative version processes the substitutions in ascending marker
-  // sequence.
-  // function textInterpolate(ary) {
-  //   var i, result = this;
-  //   console.log('Make it to textInterpolate');
-  //   console.log(typeof this);
-  //   for (i = 0; i < ary.length; i += 1) {
-  //     result = result.replace('{' + (i + 1) + '}', ary[i]);
-  //   }
-  //   return result;
-  // }// ./function textInterpolate(ary)
 
   /**
    * Create a deep copy of the passed argument.
@@ -842,7 +831,7 @@
    *                    sprite on.
    * @param {Object} gridCell   Dimensions for a single cell on the grid
    * @param {Object} owner      Reference to owner/parent context
-   *   {Array} GAME_BOARD.canvas.resourceTiles Icon URLs
+   *   {Array} GAME_BOARD.resourceTiles Icon URLs
    * @return {Object}           Avatar instance
    */
   function Avatar(options, cvsContext, gridCell, owner) {
@@ -855,7 +844,7 @@
 
     this.options = options;// Immutable
     this.parent = owner;
-    this.tiles = this.parent.GAME_BOARD.canvas.resourceTiles;
+    this.tiles = this.parent.GAME_BOARD.resourceTiles;
     this.sprite = this.tiles[options.tileIndex + this.selectorCol];
     this.colOffset = options.horizontalOffset;
     this.col = options.start.col;
@@ -881,11 +870,6 @@
     // Commands are NOT queued.  If multiple commands arrive in the same frame,
     // only the last one will get processed.
     this.pendingCommand = cmd;// 'undefined' tests as 'falsey'
-    if (!cmd) {
-      console.log((new Date()).toISOString() +
-        ' unprocessable "' + cmd + '" command received by handleInput'
-        );
-    }
   };// ./function Avatar.prototype.handleInput(cmd)
 
   /**
@@ -902,10 +886,6 @@
     // Process any pending (movement) command, passing anything else to the
     // application.
     if (this.pendingCommand) {
-      console.log((new Date()).toISOString() +
-        ' reached update; pending command: cmd = "' + this.pendingCommand +
-        '".'
-        );
       this.appEvent.detail.command = this.pendingCommand;
       if (this.sleeping) {
         //Pass ALL commands to the main application
@@ -930,10 +910,6 @@
           document.dispatchEvent(this.appEvent);
           break;
         }// ./switch (this.pendingCommand)
-        console.log((new Date()).toISOString() +
-          ' pending command: cmd = "' + this.pendingCommand +
-          '" processed in update'
-          );
       }// ./else !(this.sleeping)
 
       // Always clear any pending command.  Commands are not queued while they
@@ -944,9 +920,6 @@
 
   /**
    * Show the possible avatar selections, and highlight the current choice
-   *
-   * IDEA: 'scroll' displayed avatars when there are more than would fit on a
-   * single row.  When .col off canvas.
    *
    * @return {undefined}
    */
@@ -961,10 +934,6 @@
     } else if (this.selectorCol >= this.options.avatarCount) {
       this.selectorCol = 0;
     }// ./ else if (this.selectorCol >= this.options.avatarCount)
-
-    // TODO: check this.options.avatarCount <=
-    // this.parent.GAME_BOARD.canvas.gridCols
-    // scroll/page avatars if not, maintain selection page in index calculations
 
     // Display each selectable avatar on a separate column
     this.row = this.options.selector.row;
@@ -992,15 +961,9 @@
    *
    * @return {undefined}
    */
-  Avatar.prototype.die = function (cause) {
-    // this.freezeEnemies();
-    // TODO: stub
-    // Save any internal state before changing to show the death throes
-    // change icon? animate? spin and shrink?
-    // ?? just hide the avatar, and use another sprite for that ??
-    // this.livingSprite = this.sprite;
-    console.log('Avatar died ' + cause);
-  };// ./function Avatar.prototype.die(cause)
+  Avatar.prototype.die = function () {
+    return null;// noop Stub
+  };// ./function Avatar.prototype.die()
 
   /**
    * Restore to 'normal' conditions after death throes finished
@@ -1008,10 +971,7 @@
    * @return {undefined}
    */
   Avatar.prototype.resurrect = function () {
-    // TODO: stub
-    // restore any (internal) changes made to show the death throes
-    // this.sprite = this.livingSprite;
-    console.log('Avatar resurrected');
+    return null;// noop Stub
   };// ./function Avatar.prototype.resurrect()
 
 
@@ -1158,6 +1118,9 @@
     ENUMS.STATE.waiting
   ];
 
+  // Store the single actual instance of the application class
+  froggerInstance = false;
+
   /**
    * Check if the requested target is a valid transition from current state
    *
@@ -1229,19 +1192,15 @@
       this.lives = this.APP_CONFIG.player.start.lives;
       this.score = 0;
     }
-    // TODO: handle (better) if this.lvlIndex >= max configured levels
+
+    // Currently, if run out of level configurations, there is no way to
+    // continue.
     if (this.lvlIndex >= this.APP_CONFIG.enemy.levels.length) {
-      console.log((new Date()).toISOString() + ' Throwing game broken');
       this.finiteState.lock = false;
       throw new Error('Game broken, no level ' + this.level + ' configuration');
     }
 
-    // Set timeout value (for the state), then switch to running?
-    // TODO: setup counter to force delay before (eventually) getting to
-    // running state, to allow the sprites to 'fill' each of the rows.  This
-    // is less than the (slowest) time to traverse a complete row by the
-    // final (pattern) separation distance (divided by speed)
-    // each row: canvas (width / speed) - (distance[-1] / speed)
+    // Pick the state to transition too after the level is setup.
     if (this.finiteState.selectPending) {
       this.finiteState.next = ENUMS.STATE.select;
     } else {
@@ -1269,9 +1228,6 @@
     var lockStatus, tmpMsg;
     lockStatus = this.finiteState.lock;
     this.finiteState.lock = true;
-    console.log((new Date()).toISOString() + ' changing state: "' +
-      this.finiteState.current + '" ==> "' + newState + '"'
-      );
 
     if (lockStatus) {
       // This function is not recursive / re-entrant safe.  Make sure that only
@@ -1322,8 +1278,6 @@
       // this.changeOn = ENUMS.CHANGE.elapsed;
       this.finiteState.changeOn = ENUMS.CHANGE.trigger;
       this.finiteState.doCurrent = true;
-      // NOTE: this.player.die() is currently just a stub
-
       break;
 
     case ENUMS.STATE.donelevel:
@@ -1383,9 +1337,6 @@
       break;
     }// ./switch (this.finiteState.current)
 
-    console.log((new Date()).toISOString() + ' changed state: "' +
-      this.finiteState.current + '" ==> "' + newState + '"'
-      );
     //this.finiteState.previous = this.finiteState.current;
     this.finiteState.current = newState;
     this.elapsedTimes.state = 0;
@@ -1412,44 +1363,6 @@
     }
   }// ./function manageTime(deltaTime)
 
-  // Store the single actual instance of the application class
-  froggerInstance = false;
-  // TODO: wrap the Frogger class constructor and the froggerInstance instance
-  // variable in another function that returns the (inner) Frogger function.
-  // Same structure as the Sprite function, using the private 'class scope'
-  // (function closure scope) data area to hold the instance reference.
-
-  // more closure scope properties for the PaceCar (inner) Class
-
-  /**
-   * PaceCar class message property getter function
-   *
-   * @return {string}
-   */
-  function getMessage() {
-    /* jshint validthis: true */
-    return this.private.message;
-  }// ./function getMessage()
-
-  /**
-   * Set the message text to be display in the HUD status line
-   *
-   * PaceCar class message property setter function
-   *
-   * @param {string} message    The message content
-   * @return {string}
-   */
-  function setMessage(message) {
-    /* jshint validthis: true */
-    this.private.message = message;// Immutable
-    // Setup to start displaying the new message
-    this.scrollMessage = true;
-    this.position.x = this.context.canvas.width;
-    this.scrollEnd = this.position.x;
-
-    return this.private.message;
-  }
-
   /**
    * Class to control the application and operations sequence
    *
@@ -1458,7 +1371,6 @@
   function Frogger() {
     var that;
     this.private = {};// (psuedo) private storage for class instances
-    console.log((new Date()).toISOString() + ' reached Frogger constructor');
 
     // Reasonably robust singleton class pattern implementation
     if (froggerInstance) {
@@ -1483,6 +1395,35 @@
      */
 
     /**
+     * PaceCar class message property getter function
+     *
+     * @return {string}
+     */
+    function getMessage() {
+      /* jshint validthis: true */
+      return this.private.message;
+    }// ./function getMessage()
+
+    /**
+     * Set the message text to be display in the HUD status line
+     *
+     * PaceCar class message property setter function
+     *
+     * @param {string} message    The message content
+     * @return {string}
+     */
+    function setMessage(message) {
+      /* jshint validthis: true */
+      this.private.message = message;// Immutable
+      // Setup to start displaying the new message
+      this.scrollMessage = true;
+      this.position.x = this.context.canvas.width;
+      this.scrollEnd = this.position.x;
+
+      return this.private.message;
+    }
+
+    /**
      * Tracking sprite: allow application to interface with animation engine
      *
      * A Pseudoclassical subClass (of Sprite) used to pick up elapsed time
@@ -1494,18 +1435,14 @@
      * @return {Object}         PaceCar instance
      */
     function PaceCar(ownerInstance, cvsContext) {
-      // Get an explicit reference during construction, instead of relying on
-      // accessing outer function Frogger constructor 'this' context through
-      // 'that'.  A little bit of decoupling.
       this.owner = ownerInstance;
       this.animation = {
         "score" : {
           "displayScore" : 0
         }
       };
-      this.animation.score.tuning = {};// DEBUG
       Sprite.call(this, undefined, 0, undefined, cvsContext);
-      this.speed = 0;// Not using the setter from Enemy
+      this.speed = 0;// Not using the setter from Enemy class
       this.scrollMessage = false;
       // Automatically update dependant properties on state changes
       Object.defineProperty(this, "message", {
@@ -1526,7 +1463,6 @@
     PaceCar.prototype.jumpScore = function (dat) {
       if (dat.displayScore > this.owner.score) {
         // Straight jump on decrease (only expected for reset to zero)
-        // TODO: could (fast) animate this too
         dat.displayScore = this.owner.score;
         dat.state = ENUMS.MOTION.static;
         return true;
@@ -1546,7 +1482,7 @@
      * @param {Number} deltaTime (Fractional) seconds since previous update
      * @return {undefined}
      */
-    PaceCar.prototype.scoringStatic = function (dat, deltaTime, tune) {//tune DBG
+    PaceCar.prototype.scoringStatic = function (dat, deltaTime) {
       var prm;
       prm = this.owner.APP_CONFIG.hud.animation.score;
       if (dat.state === ENUMS.MOTION.static) {// Setup initial parameters
@@ -1559,10 +1495,6 @@
         // get the first (integer) step increase, rounded from 0.5 + ε
         // 0.5 + ε = ½a × Δt² ==> t = sqrt((1 + ε)/a)
         dat.dt = Math.sqrt(1.001 / dat.a) - deltaTime;
-        tune.step = 0;// DEBUG
-        tune.timeSkip = dat.dt + deltaTime;// DEBUG
-        tune.refPoint = [];// DEBUG
-        tune.animTime = 0;// DEBUG
       }// ./if (dat.state === ENUMS.MOTION.static)
     };// ./function PaceCar.prototype.scoringStatic(dat)
 
@@ -1572,36 +1504,17 @@
      * @param {Object} dat      Score display status information
      * @return {undefined}
      */
-    PaceCar.prototype.scoringTargetChange = function (dat, tune) {// tune 4 debug
-      var prm, tnDt;// DEBUG tnDt
+    PaceCar.prototype.scoringTargetChange = function (dat) {
+      var prm;
       prm = this.owner.APP_CONFIG.hud.animation.score;
+      // Handle both initial start, and change while animating
       if (this.owner.score > dat.target + 0.5) {// Target changed
-        // Handle both initial start, and change while animating
-        tnDt = {// DEBUG
-          "context" : 'change',
-          "display" : dat.displayScore,
-          "target0" : dat.target,
-          "s0" : dat.s0,
-          "s1" : dat.s1,
-          "v0" : dat.v0,
-          "v1" : dat.v1,
-          "a0" : dat.a,
-          "state0" : dat.state,
-          "step" : tune.step,
-          "timeRef" : tune.animTime
-        };
-
         // Setup animation parameters to continue from the current conditions
         dat.target = this.owner.score - 0.499;// Offset better for int step
         dat.s0 = dat.s1;// Displayed score when score changed
         dat.v0 = dat.v1;// Velocity when score changed
         dat.a = prm.acceleration;// Set to accelerate; normal logic will
         dat.state = ENUMS.MOTION.acceleration;// 'catch up' as needed
-
-        tnDt.target1 = dat.target;// Debug
-        tnDt.a1 = dat.a;// Debug
-        tnDt.state1 = dat.state;
-        tune.refPoint.push(tnDt);// Debug
       }// ./if (this.owner.score > dat.target + 0.5)
     };// ./function PaceCar.prototype.scoringTargetChange(dat)
 
@@ -1611,35 +1524,18 @@
      * @param {Object} dat      Score display status information
      * @return {undefined}
      */
-    PaceCar.prototype.scoringAcceleration = function (dat, tune) {// tune 4 debug
-      var prm, tnDt;// DEBUG tnDt
+    PaceCar.prototype.scoringAcceleration = function (dat) {
+      var prm;
       prm = this.owner.APP_CONFIG.hud.animation.score;
       if (dat.state === ENUMS.MOTION.acceleration) {// Fast enough yet?
         // s1 + v1 × Δt >= s{target}
         if (dat.s1 + dat.v1 * prm.coasting >= dat.target) {
-          tnDt = {// DEBUG
-            "context" : 'coast',
-            "display" : dat.displayScore,
-            "target" : dat.target,
-            "s0" : dat.s0,
-            "s1" : dat.s1,
-            "v0" : dat.v0,
-            "v1" : dat.v1,
-            "a0" : dat.a,
-            "state0" : dat.state,
-            "step" : tune.step,
-            "timeRef" : tune.animTime
-          };
           // v1 is high enough to reach the target in .coasting seconds.
           dat.s0 = dat.s1;// Score when acceleration stopped
           dat.v0 = dat.v1;// Velocity when acceleration stopped
           dat.a = 0;
           dat.dt = 0;// New reference point
           dat.state = ENUMS.MOTION.coasting;
-
-          tnDt.a1 = dat.a;// Debug
-          tnDt.state1 = dat.state;
-          tune.refPoint.push(tnDt);// Debug
         }// ./if (dat.s1 + dat.v1 * prm.coasting >= dat.target)
       }// ./if (dat.state === ENUMS.MOTION.acceleration)
     };// ./function PaceCar.prototype.scoringAcceleration(dat)
@@ -1650,25 +1546,12 @@
      * @param {Object} dat      Score display status information
      * @return {undefined}
      */
-    PaceCar.prototype.scoringCoasting = function (dat, tune) {// tune 4 debug
-      var prm, tnDt;// DEBUG tnDt
+    PaceCar.prototype.scoringCoasting = function (dat) {
+      var prm;
       prm = this.owner.APP_CONFIG.hud.animation.score;
       if (dat.state === ENUMS.MOTION.coasting) {// change to landing?
         // s1 + v1 × Δt >= s{target}
         if (dat.s1 + dat.v1 * prm.turnover >= dat.target) {
-          tnDt = {// DEBUG
-            "context" : 'land',
-            "display" : dat.displayScore,
-            "target" : dat.target,
-            "s0" : dat.s0,
-            "s1" : dat.s1,
-            "v0" : dat.v0,
-            "v1" : dat.v1,// = .v0
-            "a0" : dat.a,// zero
-            "state0" : dat.state,
-            "step" : tune.step,
-            "timeRef" : tune.animTime
-          };
           // s1 high enough to reach the target (coasting) in .turnover seconds
           // Decelerate to 'land' exactly at .target after .landing seconds
           dat.s0 = dat.s1;// Score when deceleration started
@@ -1678,9 +1561,6 @@
             (prm.landing * prm.landing);
           dat.dt = 0;// New reference point (@ dat.s1 === .s0)
           dat.state = ENUMS.MOTION.deceleration;
-
-          tnDt.state1 = dat.state;
-          tune.refPoint.push(tnDt);// Debug
         }// ./if (dat.s1 + dat.v1 * prm.turnover >= dat.target)
       }// ./if (dat.state === ENUMS.MOTION.coasting)
     };// ./function PaceCar.prototype.scoringCoasting(dat)
@@ -1691,31 +1571,9 @@
      * @param {Object} dat      Score display status information
      * @return {undefined}
      */
-    PaceCar.prototype.scoringDoneCheck = function (dat, tune) {// tune 4 debug
-      var tnDt;// DEBUG
+    PaceCar.prototype.scoringDoneCheck = function (dat) {
       if (dat.displayScore >= this.owner.score) {
-        tnDt = {
-          "context" : 'landed',
-          "display" : dat.displayScore,
-          "owner" : this.owner.score,
-          "target" : dat.target,
-          "s0" : dat.s0,
-          "s1" : dat.s1,
-          "v0" : dat.v0,
-          "v1" : dat.v1,
-          "a0" : dat.a,// negative
-          "step" : tune.step,
-          "state0" : dat.state,
-          "timeRef" : tune.animTime
-        };
         dat.state = ENUMS.MOTION.static;
-        tnDt.state1 = dat.state;// Debug
-        tune.refPoint.push(tnDt);// Debug
-        console.log(tune, ', .refPoints==>');// Debug
-        for (tnDt = 0; tnDt < tune.refPoint.length; tnDt += 1) {
-          console.log(JSON.stringify(tune.refPoint[tnDt]));
-        }
-        tnDt = 0;
       }// ./if (dat.displayScore >= this.owner.score)
     };// ./function PaceCar.prototype.scoringDoneCheck(dat)
 
@@ -1729,27 +1587,24 @@
      * @return {undefined}
      */
     PaceCar.prototype.animateScoring = function (deltaTime) {
-      var dat, tune;// Debug==tune
+      var dat;
       dat = this.animation.score;
-      tune = dat.tuning;// Debug
       if (this.jumpScore(dat)) { return; }// Quick exit if no animation needed
 
       // The score is higher than displayed: Animate the increase 'spin' rate.
-      this.scoringStatic(dat, deltaTime, tune);// DEBUG tune parameter
-      this.scoringTargetChange(dat, tune);// DEBUG tune parameter
-      this.scoringAcceleration(dat, tune);// DEBUG tune parameter
-      this.scoringCoasting(dat, tune);// DEBUG tune parameter
+      this.scoringStatic(dat, deltaTime);
+      this.scoringTargetChange(dat);
+      this.scoringAcceleration(dat);
+      this.scoringCoasting(dat);
 
       dat.dt += deltaTime;
-      tune.animTime += deltaTime;// Debug
       // s1 = s0 + v0 × Δt + ½a × Δt²
       dat.s1 = dat.s0 + dat.v0 * dat.dt +
         dat.a * dat.dt * dat.dt / 2;
       dat.v1 = dat.v0 + dat.a * dat.dt;// As of previous Δt
-      tune.step += 1;// Debug
       dat.displayScore = Math.round(dat.s1);
 
-      this.scoringDoneCheck(dat, tune);// DEBUG tune parameter
+      this.scoringDoneCheck(dat);
     };// ./function PaceCar.prototype.animateScoring(deltaTime)
 
     /**
@@ -1774,7 +1629,6 @@
         } else {// !(this.scrollEnd < 0)
           this.position.x += this.message.speed * deltaTime;
         }// ./else !(this.scrollEnd < 0)
-        //TODO: add logic to change the message occasionally
       }// ./if (this.scrollMessage)
 
       this.animateScoring(deltaTime);
@@ -1883,9 +1737,6 @@
       ctx.textAlign = 'left';
 
       segWidths = {};
-      // TODO: IDEA: change the time label colour (style) based on time remaining
-      // stl = styleCalc(this.owner.currentSettings.levelTime,
-      // this.owner.elapsedTimes.level);// green>>yellow>>red
       segWidths.time = placeLabel.call(ctx, hud.labels.time, hud.headline.baseY);
       segWidths.level = placeLabel.call(ctx, hud.labels.level,
         hud.headline.baseY
@@ -1943,7 +1794,7 @@
           }
         }
       } else {
-        // No message is currently being scrolled, so show that 'static' data
+        // No message is currently being scrolled, so show the 'static' data
         ctx.font = hud.statusline.valuesfont;
         placeValue.call(ctx, this.owner.lives, hud.values.lives,
           hud.labels.lives.left + segWidths.lives,
@@ -1967,13 +1818,12 @@
      * loaded.  Set is this up as a JSON object structure that could potentially
      * be loaded from an external file / resource.
      * This is intended to be constant information.  None of the contents are
-     * are expected to be modified after the initial create / load.
+     * expected to be modified after the initial create / load.
      *
-     *  canvas : {Object}     Information about the grid used for the game
-     *                        playing field
+     *  canvasStyle {string}  css styling to apply to created html canvas Element
      *  gridRows : {Integer}  base playing field grid height
      *  gridCols : {Integer}  base playing field grid width
-     *  gridCells : {Array}   URLs of resources to build the base playing field:
+     *  rowImages : {Array}   URLs of resources to build the base playing field:
      *                        Each image is repeated to fill the row; top row is
      *                        water, followed by three rows of stone, then 2
      *                        rows of grass.
@@ -1982,51 +1832,53 @@
      *                        some transparent area at the top.
      *  Padding : {Object}    An extra 20 pixels is (to be) added to the bottom
      *                        of the canvas; all other padding is 0.
-     *  ResourceTiles : {Array} Additional image resources to be preloaded.
+     *  ResourceTiles : {Array} All image resources to be preloaded.
      */
     this.GAME_BOARD = {
-      "canvas" : {
-        "gridRows" : 6,
-        "gridCols" : 5,
-        "gridCells" : [
-          "images/water-block.png",
-          "images/stone-block.png",
-          "images/stone-block.png",
-          "images/stone-block.png",
-          "images/grass-block.png",
-          "images/grass-block.png"
-        ],
-        "cellSize" : {
-          "height" : 83,
-          "width" : 101
-        },
-        "tileSize" : {
-          "height" : 171,
-          "width" : 101
-        },
-        "padding" : {
-          "left" : 0,
-          "top" : 0,
-          "right" : 0,
-          "bottom" : 20
-        },
-        "resourceTiles" : [
-          "images/enemy-bug.png",
-          "images/char-boy.png",
-          "images/char-cat-girl.png",
-          "images/char-horn-girl.png",
-          "images/char-pink-girl.png",
-          "images/char-princess-girl.png",
-          "images/Selector.png",
-          "images/Gem Blue.png",
-          "images/Gem Green.png",
-          "images/Gem Orange.png",
-          "images/Heart.png",
-          "images/Key.png",
-          "images/Rock.png",
-          "images/Star.png"
-        ]
-      }
+      "canvasStyle" : "border: 0px solid; background-color: aqua;",
+      "gridRows" : 6,
+      "gridCols" : 5,
+      "rowImages" : [
+        "images/water-block.png",
+        "images/stone-block.png",
+        "images/stone-block.png",
+        "images/stone-block.png",
+        "images/grass-block.png",
+        "images/grass-block.png"
+      ],
+      "cellSize" : {
+        "height" : 83,
+        "width" : 101
+      },
+      "tileSize" : {
+        "height" : 171,
+        "width" : 101
+      },
+      "padding" : {
+        "left" : 0,
+        "top" : 0,
+        "right" : 0,
+        "bottom" : 20
+      },
+      "resourceTiles" : [
+        "images/enemy-bug.png",
+        "images/char-boy.png",
+        "images/char-cat-girl.png",
+        "images/char-horn-girl.png",
+        "images/char-pink-girl.png",
+        "images/char-princess-girl.png",
+        "images/Selector.png",
+        "images/Gem Blue.png",
+        "images/Gem Green.png",
+        "images/Gem Orange.png",
+        "images/Heart.png",
+        "images/Key.png",
+        "images/Rock.png",
+        "images/Star.png",
+        "images/water-block.png",
+        "images/stone-block.png",
+        "images/grass-block.png"
+      ]
     };// ./GAME_BOARD = {};
     /* Populate object properties with a bunch of constants needed by the
      * running application, where they can all be referenced and maintained in a
@@ -2037,9 +1889,8 @@
      * forward from the previous level information.  Delta values can be used
      * in place of explicit values in many places.
      *
-
      * enemy {Object}
-     *   tileIndex {Integer}  Icon index in GAME_BOARD.canvas.resourceTiles
+     *   tileIndex {Integer}  Icon index in GAME_BOARD.resourceTiles
      *   vertialOffset {Integer} Offset (pixels) to align to playing field grid
      *   maxSprites {Array}   Maximum number of enemy sprites that will be
      *                        needed simultaneously for each row.  This includes
@@ -2085,18 +1936,18 @@
      *     startDistance {Number} Change from previous pattern startDistance
      *     speed {Integer}    Change from previous pattern speed
      *     distance {Array of Number} Changes to previous pattern distances
-
+     *
      * player {Object}        Configuration information for player avatar
-     *   tileIndex            GAME_BOARD.canvas.resourceTiles index first avatar
+     *   tileIndex            GAME_BOARD.resourceTiles index first avatar
      *   tileCount            Number of avatar icons available (after selector)
      *   start {Object}       Player settings for the start of game and level
      *     row {Integer}      The grid row to start from for each level
      *     col {Integer}      The grid column to start from for each level
      *     lives {Integer}    The number of lives at the start of the game
      * selector {Object}      Configuration information for avatar selection
-     *   tileIndex            GAME_BOARD.canvas.resourceTiles index for highlight
+     *   tileIndex            GAME_BOARD.resourceTiles index for highlight
      *   row {Integer}        The grid row to display selections on
-
+     *
      * game {Object}
      *   levels {Array}       One {Object} entry per game level
      *                    ??  need a way to continue past configured levels ??
@@ -2122,7 +1973,7 @@
      *   goal                 Finish the level before time runs out
      *   timeleft             Per second bonus for time remaining @level end
      *   {sprite_url}         Picking up a prize sprite
-
+     *
      * hud {Object}
      *   headline {Object}    Configuration for drawing text at canvas top
      *     baseY {Integer}    Pixel offset from top of canvas for text drawing
@@ -2493,26 +2344,13 @@
       "player" : {},
       "enemy" : {}
     };
-    // PaceCar class is currently being defined local to the Frogger constructor
-    // function, so it is not directly callable from outside, including from
-    // the Frogger class prototype functions.
-    //this.tracker = new PaceCar(this);
-    // Creating an instance reference to the constructor function makes it
-    // available, so it can be invoked from outside.  Specifically the more
-    // appropriate Frogger.prototype.start function, where the needed details
-    // are actually available.
+    // Make the inner class PaceCar constructor available through the instance
     this.TrackerBuilder = PaceCar;
 
-    console.log((new Date()).toISOString() + ' waiting for engineReady');
-    // Setup a callback, so that details can be filled in when the Animation
-    // has things setup
+    // Start things off when the engine has the graphical environment ready
     document.addEventListener('engineReady', function (e) {
-      console.log((new Date()).toISOString() + ' caught engineReady event');
-      // Access outer function Frogger constructor 'this' context through
-      // closure scope 'that'
       that.start(e.detail.context);
     });
-
   }// ./function Frogger()
 
   /**
@@ -2616,7 +2454,6 @@
    * @return {undefined}
    */
   Frogger.prototype.handleCommand = function (request) {
-    console.log((new Date()).toISOString() + ' reached Frogger.handleCommand');
     switch (request.command) {
     case 'space':
       if (this.finiteState.changeOn === ENUMS.CHANGE.trigger) {
@@ -2625,10 +2462,6 @@
       }
       break;
     }
-     /* TODO: more commands? specific (per) states? callbacks that live beyond
-     *     the state that set them up?
-     * switchKey = this.finiteSate.current + '|' + request.command
-     */
   };// ./function Frogger.prototype.handleCommand(request)
 
   /**
@@ -2712,8 +2545,6 @@
       if (cleanup) {
         rules[rule].tileIndex = null;
         rules[rule].lifeTime = null;
-        // rules[rule].isShown = false;
-        // TODO: add more and/or cleanup
       }
       rules[rule].timesShown = 0;// The prize has never been display
 
@@ -2728,7 +2559,6 @@
       // Zero means never (0 is 'falsey')
       rules[rule].againAt =
         this.parseTimeConfig(rules[rule].condition.retry);
-      // TODO: check ?later? if repeat after collect?expired?
     }// ./for (rule = 0; rule < rules.length; rule += 1)
   };// ./function Frogger.prototype.calculatePrizeWaits(cleanup)
 
@@ -2865,7 +2695,6 @@
    */
   Frogger.prototype.initLevel = function () {
     var i;
-    console.log((new Date()).toISOString() + ' reached Frogger.initLevel');
 
     // Clear any prizes left from the previous run
     for (i = 0; i < this.prizes.length; i += 1) {
@@ -2997,7 +2826,6 @@
    */
   Frogger.prototype.start = function (cvsContext) {
     var that, gridCell, cfg, tiles, row, sprite, rowSprites;
-    console.log((new Date()).toISOString() + ' reached Frogger.start');
 
     // Create a function closure scope tag to allow the inner functions to get
     // back into the right context, when invoked with a different context.
@@ -3013,9 +2841,9 @@
      *   added for higher levels
      *   - could still dynamically add as needed
      */
-    gridCell = app.game.GAME_BOARD.canvas.cellSize;
+    gridCell = this.GAME_BOARD.cellSize;
     cfg = this.APP_CONFIG.enemy;
-    tiles = this.GAME_BOARD.canvas.resourceTiles;
+    tiles = this.GAME_BOARD.resourceTiles;
     this.enemySprites = [];
     for (row = 0; row < cfg.maxSprites.length; row += 1) {
       rowSprites = [];
@@ -3033,7 +2861,7 @@
     // column after the visible grid, to check when sprites are not yet, or
     // no longer, visible.
     this.limits.offLeftX = this.enemySprites[0][0].position.x;
-    this.enemySprites[0][0].col = this.GAME_BOARD.canvas.gridCols;
+    this.enemySprites[0][0].col = this.GAME_BOARD.gridCols;
     this.limits.offRightX = this.enemySprites[0][0].position.x;
 
     cfg = this.APP_CONFIG.player;
@@ -3060,33 +2888,6 @@
     // Start the 'press space' message scrolling
     this.tracker.message = this.APP_CONFIG.hud.statusline.templates.start;
 
-    // TODO: more
-    // How to (cleanly) get the first pattern started?
-    // - 'jump' to position(s) on canvas?
-    // - 'zoom' with compressed time?
-    // - 'fade in'?
-    // - start at column -1, and continue (no time advance)
-    //   - lock out controls till in position, so no 'open field' to start?
-    // - initial load one enemy per row, positioned just past the width of the
-    //   canvas (IE just finished the pass, no longer visible).  Set the
-    //   startDistance for the first pattern to be >= the canvas width
-    //   - make that 2 enemies per row? One just off each side of the canvas,
-    //     so the 'general' rule of updating the queued enemy can be applied
-    //     get rid of special case handling on the update checks for the very
-    //     first time.  All handled by the pre-load, using straight
-    //     configuration, without needing any startup tests.
-    // Level handling:
-    // - things that could change between levels
-    //   - time limit
-    //   - pattern speed(s)
-    //   - pattern
-    //   - scoring
-    //   - enemy collision contact area
-    //   - player collision contact area
-    //   - prizes
-    //     - prize function: score bonus; time bonus, slow enemy, reduce enemy
-    //       and/or player 'hit' size
-
     // Place all enemy objects in an array called allEnemies
     // Place the player object in a variable called player
     engineNs.allEnemies = [];
@@ -3107,9 +2908,7 @@
     }
     engineNs.player = this.player;
 
-    // TODO: Add extra keycodes: for additional 'commands'
-    // This listens for key presses and sends the keys to your
-    // Player.handleInput() method. You don't need to modify this.
+    // Listen for key presses, and send them to (avatar) handleInput
     document.addEventListener('keyup', function (e) {
       var allowedKeys = {
         32: 'space',
@@ -3118,19 +2917,14 @@
         39: 'right',
         40: 'down'
       };
-      console.log((new Date()).toISOString() +
-        ' caught keyup event: keycode = ' + e.keyCode
-        );
 
-      // Access outer function Frogger constructor 'this' context through 'that'
+      // Use function scope 'that' to access the listening object instance
       that.player.handleInput(allowedKeys[e.keyCode]);
     });
+    // Listen for (custom) 'ApplicationCommand' events, and pass them to the
+    // application handleCommand method
     document.addEventListener('ApplicationCommand', function (e) {
-      console.log((new Date()).toISOString() + ' caught ' +
-        JSON.stringify(e.detail)
-        );
-      // Access outer function Frogger constructor 'this' context through
-      // closure scope 'that'
+      // Use function scope 'that' to access the listening object instance
       that.handleCommand(e.detail);
     });
 
@@ -3139,7 +2933,6 @@
     this.finiteState.current = ENUMS.STATE.gameover;
     this.finiteState.next = ENUMS.STATE.newlevel;
     this.finiteState.changeOn = ENUMS.CHANGE.now;
-    console.log((new Date()).toISOString() + ' end Frogger.start');
   };// ./function Frogger.prototype.start(cvsContext)
 
   /**
@@ -3182,11 +2975,6 @@
     } else {
       sprites[pattern.tail].position.x = this.limits.offLeftX;
     }
-
-    // TODO: 'intelligence' for switching patterns
-    //  - make sure to keep enough info around for case where the distance
-    //    can leave the whole row blank for awhile.
-    //  - differences if speed changes
   };// ./function Frogger.prototype.initPattern(rowIndex, startDistance)
 
   /**
@@ -3203,13 +2991,8 @@
 
     for (row = 0; row < this.currentPatterns.length; row += 1) {
       rowState = this.currentPatterns[row];
-      // hpd idea: include/use rowState.expired boolean, set by .next? (when
-      // this.state changes to 'waiting', AND currently patternIdx = -1 ?)
       if (this.elapsedTimes.level >= rowState.expires) {
         rowConfig = lvlConfig.rows[row];
-        console.log('End pattern @' + rowState.expires + ' for level ' +
-          this.level + ', row ' + row
-          );
         // Index into rowConfig for the active pattern, increment and wrap to
         // zero when >= .length
         // rowState.currentPattern = incrementAndWrap(
@@ -3233,9 +3016,6 @@
           rowState.speed = ptrnConfig.speed;
         }
         if (ptrnConfig.distances) {// if the sprite spacing changes
-          // TODO: decision: does the 'immutable' configuration need to be cloned
-          //    or is is 'safe' to just reference it in place?
-          // rowState.distances = ptrnConfig.distances.slice(0);
           rowState.distances = ptrnConfig.distances;
           rowState.cntDistances = rowState.distances.length;
         }
@@ -3271,7 +3051,7 @@
         this.addSprite(row);// Pull a sprite from the recycled set.
         // Position it where it belongs (off canvas), and get it moving
         rowEnemies[rowState.tail].position.x = lastX -
-          this.nextDistance(row) * this.GAME_BOARD.canvas.cellSize.width;
+          this.nextDistance(row) * this.GAME_BOARD.cellSize.width;
         rowEnemies[rowState.tail].speed = rowState.speed;
       }
     }// ./for (row = 0; row < this.currentPatterns.length; row += 1)
@@ -3337,9 +3117,9 @@
   Frogger.prototype.playerBoundsCheck = function () {
     // check for collision with game field boundaries
     if (this.player.row < 0 ||
-        this.player.row >= this.GAME_BOARD.canvas.gridRows ||
+        this.player.row >= this.GAME_BOARD.gridRows ||
         this.player.col < 0 ||
-        this.player.col >= this.GAME_BOARD.canvas.gridCols
+        this.player.col >= this.GAME_BOARD.gridCols
         ) {
       this.reason = 'from falling off the world';
       this.state = ENUMS.STATE.dieing;
@@ -3382,8 +3162,6 @@
             xIntersected(enRow[enemy], avHalfWidth, enHalfWidth)
             ) {
           // Found a collision.  No point in checking for any more
-          // IDEA: Hit and run when overlap small, walking into vehicle when
-          // overlap is large.
           this.reason = 'from hit and run';
           this.state = ENUMS.STATE.dieing;
           return true;
@@ -3439,10 +3217,10 @@
       this.initLevel();
       break;
     case ENUMS.STATE.dieing:
-      this.player.die(this.reason);//NOTE: currently just a stub
+      this.player.die(this.reason);
       break;
     case ENUMS.STATE.resurrect:
-      this.player.resurrect();//NOTE: currently just a stub
+      this.player.resurrect();
       this.initLevel();
       break;
     case ENUMS.STATE.donelevel:
@@ -3559,8 +3337,8 @@
     var row, col, mat, aRow, aCol, maxRow, maxCol;
     aRow = this.player.row;
     aCol = this.player.col;
-    maxRow = this.GAME_BOARD.canvas.gridRows - 1;
-    maxCol = this.GAME_BOARD.canvas.gridCols - 1;
+    maxRow = this.GAME_BOARD.gridRows - 1;
+    maxCol = this.GAME_BOARD.gridCols - 1;
     mat = [];
     for (col = 0; col <= maxCol; col += 1) {
       mat[col] = [];
@@ -3569,14 +3347,11 @@
       }// ./for (row = 0; row <= maxRow; row += 1)
     }// ./for (col = 0; col <= maxCol; col += 1)
 
-    // 'Tag' locations that are closer than allowed to the avatar
+    // 'Tag' locations that are closer to the avatar than allowed
     mat[aCol][aRow] = true;
     this.tooCloseTotal(mat, rules.total, aRow, aCol);
     this.tooCloseHorizontal(mat, rules.horizontal, aCol);
     this.tooCloseVertical(mat, rules.vertical, aRow);
-
-    // TODO: maybe; if (rules.ahead) {}
-    // TODO: maybe; if (rules.behind) {}
 
     return mat;
   };// ./function Frogger.prototype.tooClose(rules)
@@ -3591,9 +3366,6 @@
       ) {
     if (rowFirst && colFirst) {
       if (flags[this.pendingPrize.col][this.pendingPrize.row]) {
-        console.log('avatar at fixed prize target of (' +
-           this.pendingPrize.col + ', ' + this.pendingPrize.row + ')'
-           );
         // throw new Error('avatar at fixed prize target of (' +
         //   this.pendingPrize.col + ', ' + this.pendingPrize.row + ')'
         //   );
@@ -3607,9 +3379,6 @@
     }
 
     if (this.pendingPrize.row < 0 || this.pendingPrize.col < 0) {
-      console.log('avatar position blocked prize placement (' +
-         this.player.col + ', ' + this.player.row + ')'
-         );
       return false;
     }
 
@@ -3681,10 +3450,6 @@
     if (this.pendingPrize.isShowing) {
       if (this.prizes[this.pendingPrize.prize].timeToLive <= 0) {
         this.pendingPrize.isShowing = false;
-        // TODO: here seems to be a good place to update the pendingPrize
-        // information, making sure not to hit the expired prize (unless
-        // it repeats)
-        // refactor initPendingPrize()?
       }
     }
     if (!this.pendingPrize.isShowing) {
@@ -3692,9 +3457,10 @@
         if (this.pickPrizeLocation()) {
           this.pendingPrize.queued = true;
         }
-      //} else if (this.pendingPrize.CheckAt <= this.elapsedTimes.level) {
-        // Update pending prize information
-        // this.?updatePendingPrize?()//refactor initPendingPrize()?
+      } else {
+        if (this.pendingPrize.CheckAt <= this.elapsedTimes.level) {
+          return undefined;// Stub
+        }
       }
     }// ./if (!this.pendingPrize.isShowing)
   };// ./function Frogger.prototype.showPrize()
@@ -3725,9 +3491,6 @@
     // level just as the time is running out.
     if (this.state === ENUMS.STATE.running) {
       this.collisionCheck();
-      // TODO:? Any extra processing needed here?  collisionCheck() returns true
-      // when state was changed: processing done by the state change code, and
-      // that SHOULD leave things ready to continue normally here.
 
       // Add any pending prize to the screen that is due
       this.showPrize();
@@ -3750,13 +3513,6 @@
 
     // Queue another enemy when the current queued enemy becomes visible
     this.refreshEnemyQueues();
-
-    // TODO: stuff…
-    // - put any enemies that have finished the pass back in the pool (for the
-    //   row)
-    //   - need explicit? or just pickup when adding to queue?
-    //     - probably needs cleanup pass, so do not end up with multiple sprites
-    //       waiting to be recycled.
   };// ./function Frogger.prototype.next(deltaTime)
 
   /**
@@ -3774,104 +3530,24 @@
       this.pendingPrize.queued = false;
       this.prizes[this.pendingPrize.prize].place(this.pendingPrize);
       this.currentSettings.prizes[this.pendingPrize.rule].timesShown += 1;
-      // this.currentSettings.prizes[this.pendingPrize.rule].isShown = true;
       this.pendingPrize.isShowing = true;
     }// ./if (this.pendingPrize.queued)
   };// function Frogger.prototype.preRender()
-
-  /** TODO: move the game board config structure description to engine.js, keep
-   *  only the specifics for the current application here
-   * Structure:
-   *  canvas : {Object}
-   *    information about the application graphical interface to be managed by
-   *    the engine.
-   *  gridRows : {Integer}
-   *    number of (equal height) rows the canvas is split into.
-   *  gridCols : {Integer}
-   *    number of (equal width) columns the canvas is split into.
-   *  gridCells : {Array of {row}} ==> [row1 [, row2]…]
-   *    Each entry specifies the image resources to use for a single row of the
-   *    grid for the canvas.  If there are fewer entries than grid rows, the
-   *    rows without images will be left blank.  To leave an earlier row
-   *    blank, specify null.  Extra row entries will be silently ignored.
-   *    row{n} {Array|String|null}
-   *      - null
-   *        Grid row ‘n’ on the canvas be left blank
-   *      - String (URL)
-   *        Each column of grid row ‘n’ will be drawn with the image at the URL
-   *      - Array (of Strings) ==> [col1 [, col2]…]
-   *        The columns of grid row ‘n’ will be drawn with the images from the
-   *        URLs.
-   *        If fewer URLs are specified than the grid contains, the provided
-   *        entries will be reused (cycled) as many times as needed to fill the
-   *        row.
-   *        If more URLS are specified than the grid contains, the extras will
-   *        be silently ignored.
-   *        to leave a column blank, specify null for the URL.
-   *    The images are drawn left to right, top to bottom.  Order is important
-   *    when image dimensions are greater than the grid cell dimensions, to
-   *    determine which transparent sections will show underlying data, and
-   *    which will be drawn over by a subsequent column or row.
-   *  cellSize : {Object}
-   *    dimensions for a single cell in the logical grid overlaying the canvas
-   *    height : {Integer}
-   *      The logical height (in pixels) of the grid rows.  This does not need
-   *      to be the same as the actual height of the used images, but it is used
-   *      as the relative offset when drawing to successive rows.
-   *    width : {Integer}
-   *      The logical width (in pixels of the grid columns.  This does not need
-   *      to be the same as the actual width of the used images, but it is used
-   *      as the relative offset when drawing to successive columns.
-   *  tileSize : {Object}
-   *    dimensions for a single image used to draw the grid cells.  If they are
-   *    not all the same, use the largest height from the bottom row, and the
-   *    largest width from right most column.  This affects the dimensions of
-   *    the canvas created to hold the grid.
-   *    height : {Integer}
-   *      The height (in pixels) of tile(s).
-   *    width : {Integer}
-   *      The width (in pixels of the tile(s).
-   *  padding : {Object}
-   *    The amount of extra space to leave around the content when the grid is
-   *    drawn.  The top and left padding controls the coordinates of row[0],
-   *    column[0].  The right and bottom padding is simply added to the
-   *    dimensions for the created html5 canvas element.
-   *    left : {Integer}
-   *      Pixels
-   *    top : {Integer}
-   *      Pixels
-   *    right : {Integer}
-   *      Pixels
-   *    bottom : {Integer}
-   *      Pixels
-   *  resourceTiles : {Array of String}
-   *    URLs of all of the image resources to be cached.  This will be
-   *    automatically extended to include unique URL entries from "gridCells".
-   */
 
   /////////////////////////////////
   // End of function definitions //
   /////////////////////////////////
 
   // Start of actual code execution
-  console.log((new Date()).toISOString() + ' start app.js code');
 
-  // Create a 'namespace' to hold application resources that need to be accessed
-  // from outside of the current anonymous wrapper function.
-  // TODO: Decide? Does game really need to be stored anywhere?  Will it work
-  //  running right here in an anonymous function?  Callbacks may be all that
-  //  is needed outside of the local function.  No external references to
-  //  app.game needed??
-  app = namespace('io.github.mmerlin.frogger');
-  //engineNs = namespace('io.github.mmerlin.animationEngine');
-  engineNs = window;
+  // Namespace where the animation engine (properties) live
+  engineNs = namespace('io.github.mmerlin.animationEngine');
 
-  //timeScaling : 1000.0,//milliseconds per second
-
-  // TODO: Remove app.game namespace? Currently there does not seem to be any
-  // need for it.  The game should be able to run completely inside the current
-  // anonymous function.  Except for (maybe) this.GAME_BOARD, the animation
-  // engine only works with objects passed to it in the engineNs properties
-  app.game = new Frogger();
+  // With the current implementation, the application itself does not need a
+  // namespace to live in.  It runs just fine in the closure scope of the
+  // anonymous wrapper function.  Nothing needs to reference it directly.  Only
+  // the objects passed to the animation engine.
+  app = new Frogger();
+  engineNs.field = app.GAME_BOARD;
 
 }());// ./function anonymous()
