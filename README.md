@@ -115,6 +115,9 @@ Expand animation engine code
 - add hooks to add a canvas after the engine is running
 - when receiving configuration data through API, return unique key with response
 -- use the key to later allow caller to modify (only) its own settings
+- use an application provided callback to add the canvas to the html document.
+-- simply appending to body might not be the desired functionality.
+- provide fallback if the canvasStyle property does not exist. 
 
 Frogger.prototype.tooClose
 Consider adding additional 'too close' case calculation
