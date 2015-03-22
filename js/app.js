@@ -266,6 +266,20 @@
   }// ./function deepCopyOf(obj)
 
   /**
+   * Reduce very large frame animation time delays to a small value.
+   *
+   * Helps keep code 'sane' when frames are stopped while a browser tab is not
+   * displayed, or while using breakpoints to debug code.  This is to be used to
+   * limit all (and only) delta time values supplied by the animation engine.
+   *
+   * @param {Number} deltaTime  Actual delta time value (fractional seconds)
+   * @returns {Number}
+   */
+  function timeCop(deltaTime) {
+    return deltaTime > 0.75 ? 0.01 : deltaTime;
+  }// ./function timeCop(deltaTime)
+
+  /**
    * Deep merge object properties, recursively, making copies.
    *
    * This function is expected to be called in the context of an object. 'this'
@@ -768,12 +782,13 @@
    * (Current) Enemies only move horizontally, so only the x position is
    * changing.
    *
-   * @param {Number} dt         Delta Time (since previous update) in seconds
+   * @param {Number} deltaTime  Delta Time (since previous update) in seconds
    * @return {undefined}
    */
-  Enemy.prototype.update = function (dt) {
+  Enemy.prototype.update = function (deltaTime) {
+    var dt = timeCop(deltaTime);
     this.position.x += this.speed * dt;// standard distance formula: Δs=v*Δt
-  };// ./function Enemy.prototype.update(dt)
+  };// ./function Enemy.prototype.update(deltaTime)
 
   /**
    * Do the sprite coordinates make it (at least partially) visible on the canvas
@@ -1008,10 +1023,13 @@
   /**
    * Move prize instance off canvas when remaining life expires
    *
+   * @param {Number} deltaTime  Delta Time (since previous update) in seconds
    * @param {Number} dt         Delta Time (since previous update) in seconds
    * @return {undefined}
    */
-  Prize.prototype.update = function (dt) {
+  Prize.prototype.update = function (deltaTime) {
+    var dt = timeCop(deltaTime);
+    if (this.col < 0) { return; }
     this.timeToLive -= dt;// Life is ticking away
     if (this.timeToLive < 0) {
       // Ran out of time; move off screen where it can no longer be collided with
@@ -1029,7 +1047,7 @@
     this.sprite = this.tiles[location.tileIndex];
     this.row = location.row;
     this.col = location.col;
-    this.timeToLive = location.seconds;
+    this.timeToLive = location.lifeTime;
   };// ./function Prize.prototype.place(location)
 
   /**
@@ -1369,7 +1387,6 @@
    * @return {Object}           Application instance
    */
   function Frogger() {
-    var that;
     this.private = {};// (psuedo) private storage for class instances
 
     // Reasonably robust singleton class pattern implementation
@@ -1377,10 +1394,6 @@
       return froggerInstance;
     }
     froggerInstance = this;
-
-    // Create a function closure scope tag to allow the inner functions to get
-    // back into the right context, when invoked with a different context.
-    that = this;
 
     ///////////////////////////////////////////////////////////
     // Definition of functions for the 'inner' PACEcAR class //
@@ -1610,11 +1623,12 @@
     /**
      * Update game state based on the elapsed time in the animation engine
      *
-     * @param {Number} deltaTime (Fractional) seconds since previous update
+     * @param {Number} deltaTime  Delta Time (since previous update) in seconds
      * @return {undefined}
      */
     PaceCar.prototype.update = function (deltaTime) {
-      this.owner.next(deltaTime);
+      var dt = timeCop(deltaTime);
+      this.owner.next(dt);
       // Update the instance position as well, to handle scrolling HUD messages
       if (this.scrollMessage) {
         if (this.scrollEnd < 0) {
@@ -1631,7 +1645,7 @@
         }// ./else !(this.scrollEnd < 0)
       }// ./if (this.scrollMessage)
 
-      this.animateScoring(deltaTime);
+      this.animateScoring(dt);
     };// ./function PaceCar.prototype.update(deltaTime)
 
     /**
@@ -2349,7 +2363,7 @@
 
     // Start things off when the engine has the graphical environment ready
     document.addEventListener('engineReady', function (e) {
-      that.start(e.detail.context);
+      app.start(e.detail.context);
     });
   }// ./function Frogger()
 
@@ -2825,11 +2839,7 @@
    * @return {undefined}
    */
   Frogger.prototype.start = function (cvsContext) {
-    var that, gridCell, cfg, tiles, row, sprite, rowSprites;
-
-    // Create a function closure scope tag to allow the inner functions to get
-    // back into the right context, when invoked with a different context.
-    that = this;
+    var gridCell, cfg, tiles, row, sprite, rowSprites;
 
     /* Create all of the enemy instances that should be needed to run the
      * whole game into a 2D array (Array of arrays).  This will be correct,
@@ -2918,14 +2928,16 @@
         40: 'down'
       };
 
-      // Use function scope 'that' to access the listening object instance
-      that.player.handleInput(allowedKeys[e.keyCode]);
+      // Use outer function scope reference to access the listening instance,
+      // since 'this' is 'document' for the listener callback function
+      app.player.handleInput(allowedKeys[e.keyCode]);
     });
     // Listen for (custom) 'ApplicationCommand' events, and pass them to the
     // application handleCommand method
     document.addEventListener('ApplicationCommand', function (e) {
-      // Use function scope 'that' to access the listening object instance
-      that.handleCommand(e.detail);
+      // Use outer function scope reference to access the listening instance,
+      // since 'this' is 'document' for the listener callback function
+      app.handleCommand(e.detail);
     });
 
     // Setup to go to level 1 (index 0) when the engine is ready

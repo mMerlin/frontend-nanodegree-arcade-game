@@ -18,6 +18,11 @@ This demonstrates the use of:
 See the live application running at
 http://mmerlin.github.io/frontend-nanodegree-arcade-game/
 
+This application is extensively data driven.  The behaviours are controlled by
+configuration object properties.  If the application was changed to load the
+configuration files at run time, multiple games could be handled by simply
+supplying a selection menu when loading the JSON data.
+
 frontend-nanodegree-arcade-game
 ===============================
 
@@ -117,7 +122,9 @@ Expand animation engine code
 -- use the key to later allow caller to modify (only) its own settings
 - use an application provided callback to add the canvas to the html document.
 -- simply appending to body might not be the desired functionality.
-- provide fallback if the canvasStyle property does not exist. 
+- provide fallback if the canvasStyle property does not exist.
+- pass the delta time to player.render, though it may not needed it (currently)
+-- would need if using any sort of movement velocity.
 
 Frogger.prototype.tooClose
 Consider adding additional 'too close' case calculation
