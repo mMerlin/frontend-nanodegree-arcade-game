@@ -59,6 +59,7 @@ Ideas:
 -- all rows
 -- 'nose' touches far side
 - With any of above, increase the time flow rate to get there faster
+-- timeCop() modification
 -- Could jump time to get to 'filled' state
 --- loop Frogger.prototype.next until conditions satisfied, render optional
 - ignore / truncate if level was not started before 'fill' conditions were met
@@ -102,13 +103,6 @@ Consider adding state specific keyboard commands
 - could use numbers to directly select avatars
 - go to select processing one command after game over
 
-Improve Prize handling.  Part of the logic exists to display multiple sequential prizes, but the code to calculate the next prize is not complete.
-- Frogger.prototype.showPrize, after this.pendingPrize.isShowing = false;
--- refactor from Frogger.prototype.initPendingPrize
-- Add checks and processing for elapsed time past this.pendingPrize.CheckAt
--- To handle case where random prize 'failed' but future retry allowed
--- Frogger.prototype.showPrize return undefined stub
-
 Expand animation engine code
 - Interface also/more using events
 - Support multiple canvas areas
@@ -130,4 +124,21 @@ Frogger.prototype.tooClose
 Consider adding additional 'too close' case calculation
 - ahead, behind
 
-Move the description for the GAME_BOARD configuration structure to engine.js
+Frogger.state ; setState
+Refactor to a FinitestateMachine instance
+Instead of (internal) hard-coded state information, 'add' states and valid
+transitions to the instance after creation.  Add a callback function to each
+state, to be executed when .transitionTo is invoked.  This should reduce the
+cyclomatic complexity, since code is executed based on property lookup, instead
+of a hard-coded switch statement.
+
+For full(er) implementation of FinitestateMachine class, make it handle checks
+and transitions.
+FinitestateMachine()
+FinitestateMachine.start(state)//Use internal flag so can only be run once per instance
+FinitestateMachine.addState(sateKey,{transition:callback,each:callback,exit:callback})
+- transition callback runs when entering state
+- each callback runs each 'tick' while in state (sets next state for transitions)
+- exit callback runs just before transition to a new state
+FinitestateMachine.allowTransition(sateKey,sateKey)
+

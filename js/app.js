@@ -227,9 +227,6 @@
    * should not cause any problems.  The context of the function will be its
    * destination.
    *
-   * NOTE: Memory says that some browsers (versions?) show 'object' for
-   * typeof function, but I found no references.
-   *
    * NOTE: This has not been tested with regex objects.  Regex is documented as
    * being detected as an object, but it is not known whether standard object
    * processing will properly clone it.
@@ -1007,11 +1004,13 @@
    * @param {Array of string}   tiles Icon URLs to select from
    * @param {Object} cvsContext The CanvasRenderingContext2D to display the
    *                    sprite on
+   * @param {Object} callbacks  object properties hold callback functions
    * @return {Object}           Prize instance
    */
-  function Prize(vOffset, hOffset, gridCell, tiles, cvsContext) {
+  function Prize(vOffset, hOffset, gridCell, tiles, cvsContext, callbacks) {
     Enemy.call(this, null, 0, vOffset, undefined, cvsContext, gridCell);
 
+    this.callbacks = callbacks;
     this.tiles = tiles;
     this.colOffset = hOffset;
     this.col = -1;
@@ -1032,10 +1031,39 @@
     if (this.col < 0) { return; }
     this.timeToLive -= dt;// Life is ticking away
     if (this.timeToLive < 0) {
-      // Ran out of time; move off screen where it can no longer be collided with
-      this.hide();
+      this.expired();
     }
   };// ./function Prize.prototype.update()
+
+  /**
+   * Cleanup and save status information when the prize times out before being
+   * collected.
+   *
+   * This expired processing is needed as part of the class, because the timeout
+   * occurs here, and the invoking (.place`ing) needs to know.  This seems
+   * better than having the external code peek at the internals of the Prize
+   * class instance to detected the timeout.
+   *
+   * @return {undefined}
+   */
+  Prize.prototype.expired = function () {
+    // Remove the prize from the canvas, and let the specified object know
+    this.hide();
+    this.callbacks.expired.call(this.callbacks.context);
+  };// ./function Prize.prototype.expired()
+
+  /**
+   * Cleanup and save status information when the prize was collected before
+   * the time expired
+   *
+   * Note: This method is really just for symmetry with .expired.  Collection is
+   * done by external code, so it already knows about it, and tells 'us'.
+   *
+   * @return {undefined}
+   */
+  Prize.prototype.collected = function () {
+    this.hide();// Remove the prize from the canvas
+  };// ./function Prize.prototype.collected()
 
   /**
    * Show the prize instance on the canvas
@@ -1113,7 +1141,6 @@
   ];
   ENUMS.TRANSITIONS[ENUMS.STATE.waiting] = [
     ENUMS.STATE.newlevel,
-    ENUMS.STATE.resurrect,
     ENUMS.STATE.select
   ];
   ENUMS.TRANSITIONS[ENUMS.STATE.dieing] = [
@@ -1130,6 +1157,7 @@
   ];
   ENUMS.TRANSITIONS[ENUMS.STATE.newlevel] = [
     ENUMS.STATE.donelevel,
+    ENUMS.STATE.resurrect,
     ENUMS.STATE.gameover
   ];
   ENUMS.TRANSITIONS[ENUMS.STATE.running] = [
@@ -1311,7 +1339,8 @@
       if (this.lives <= 0) {
         this.finiteState.next = ENUMS.STATE.gameover;
       } else {
-        this.finiteState.next = ENUMS.STATE.waiting;
+        this.lvlIndex -= 1;// Repeat the same level
+        this.finiteState.next = ENUMS.STATE.newlevel;
         this.finiteState.doCurrent = true;
       }
       this.finiteState.changeOn = ENUMS.CHANGE.now;
@@ -1968,7 +1997,7 @@
      *     length {Number}    The actual length of time (seconds) allowed to
      *                        complete the level (without dieing)
      *     sizeFactor {Number} The collision size fraction of avatar tile size
-     *     reward {Object}    Per level reward bonus settings
+     *     rewards {Object}   Per level reward bonus settings
      *       {reward_property} {Object} Bonus information for 'doing' 'property'
      *         score {Integer} Add to current score
      *         time {Integer} Add to time remaining for current level
@@ -1979,14 +2008,36 @@
      *       {each Object}    One possible goal condition
      *         row {Integer}  Being on specific playing grid row, AND
      *         cols {Array of Integer} Being on any specified grid column
-     *     prizes {Object}    Information about which/when/where prizes to show
-     *       delta {Object}   (Cumulative) change from previous levels
+     *     prizes {Array}     Information about which/when/where to show prizes
      *     delta {Object}     Values to adjust from previous level settings
      *       length {Number}  Change from previous level length
      * {reward_property} {Object}
      *   goal                 Finish the level before time runs out
      *   timeleft             Per second bonus for time remaining @level end
      *   {sprite_url}         Picking up a prize sprite
+     * game.levels[].prizes[] {Object}
+     *   condition {Object}
+     *     when {Object}
+     *       collected {Object} <<delta_time>> object; min time after collection
+     *       expired {Object} <<delta_time>> object: min time after expired
+     *       failed {Object}  <<delta_time>> object: min time after failed
+     *     if {Object}        <<bool_check> object
+     *   constraints {Object}
+     *     tileIndex {Object} Single Integer, or Array of Integer
+     *     minDistance {Object}
+     *       total {Integer}
+     *     row {Object} Single Integer, or Array of Integer
+     *     col {Object} Single Integer, or Array of Integer
+     *   time {Object}        <<delta_time>> object
+     * <<delta_time>> {Object} ax + b; x = times shown, a,b = fix + dlta * random
+     *   base {Number}        b.fixed
+     *   additional {Number}  b.delta
+     *   fixed {Number}       a.fixed
+     *   delta {Number}       a.delta
+     * <<bool_check> {Object} occ * count + random < limit
+     *   occurrence {Number}
+     *   limit {Number}
+
      *
      * hud {Object}
      *   headline {Object}    Configuration for drawing text at canvas top
@@ -2038,7 +2089,7 @@
         "maxSprites" : [3, 4, 4],
         "topRow" : 1,
         "levels" : [
-          {
+          {// json level 0 start
             "sizeFactor" : 1.0,
             "rows" : [
               [
@@ -2066,8 +2117,8 @@
                 }
               ]
             ]
-          },
-          {
+          },// json level 0 end
+          {// json level 1 start
             "rows" : [
               [
                 {
@@ -2094,8 +2145,8 @@
                 }
               ]
             ]
-          }
-        ],
+          }// json level 1 end
+        ],// json levels[] end
         "reset" : {
           "expires" : { "writable": true, "configurable": true, "value": 0 },
           "currentPattern" :
@@ -2145,24 +2196,6 @@
               },
               "images/Gem Blue.png" : {
                 "score" : 5
-              },
-              "images/Gem Green.png" : {
-                "score" : 20
-              },
-              "images/Gem Orange.png" : {
-                "score" : 40
-              },
-              "images/Key.png" : {
-                "score" : 60
-              },
-              "images/Heart.png" : {
-                "lives" : 1
-              },
-              "images/Rock.png" : {
-                "speed" : 0.5
-              },
-              "images/Star.png" : {
-                "time" : 10
               }
             },
             "goal" : [
@@ -2175,16 +2208,26 @@
               {
                 "condition" : {
                   "when" : {
-                    "base" : 2
+                    "collected" : {
+                      "base" : 1,
+                      "fixed" : 1
+                    },
+                    "expired" : {
+                      "fixed" : 1
+                    },
+                    "increaseBy" : {
+                      "base" : 2
+                    }
+                  },
+                  "if" : {
+                    "occurrence" : 1,
+                    "limit" : 1
                   }
                 },
                 "constraints" : {
                   "tileIndex" : 0,
-                  "minDistance" : {
-                    "total" : 1
-                  },
-                  "row" : [1],
-                  "col" : [1, 1, 0, 1, 1]
+                  "row" : 0,
+                  "col" : [1, 1, 1, 1, 1]
                 },
                 "time" : {
                   "base" : 5
@@ -2341,18 +2384,11 @@
     this.elapsedTimes = {};
     this.prizes = [];
     this.pendingPrize = {
-      "queued" : false,
-      "checkAt" : 0,
+      "isShowing" : false,
       "prize" : 0
-    };// No prize reward to be shown on canvas (yet)
-    // this.pendingPrize = {
-    //   "queued" : true,
-    //   "prize" : 0,
-    //   "tileIndex" : ?,
-    //   "row" : ?,
-    //   "col" : ?,
-    //   "seconds" : ?
-    // };
+    };
+    // No prize reward to be shown on canvas (yet), current implementation only
+    // uses a single Prize sprite, so prize (index) always zero.
 
     this.currentSettings = {
       "player" : {},
@@ -2519,15 +2555,18 @@
    * obj = { base : 0, additional : 0 }
    *
    * @param {Object} obj        Object with time configuration properties
+   * @param {Integer} previous  number of times the prize has already been shown
    * @return {Number}           Seconds
    */
-  Frogger.prototype.parseTimeConfig = function (obj) {
+  Frogger.prototype.parseTimeConfig = function (obj, previous) {
     if (obj === undefined) {
       // No configuration object ==> no offset
       return 0;
     }
-    return (obj.base || 0) + (obj.additional || 0) * Math.random();
-  };// ./function Frogger.prototype.parseTimeConfig(obj)
+    // y = ax + b; a and b can each have random component: = fixed + delta * r
+    return ((obj.fixed || 0) + (obj.delta || 0) * Math.random()) * previous +
+      (obj.base || 0) + (obj.additional || 0) * Math.random();
+  };// ./function Frogger.prototype.parseTimeConfig(obj, previous)
 
   /**
    * Determine a boolean value from a configuration object
@@ -2535,6 +2574,7 @@
    * obj = { occurrence : 0, limit : 0 }
    *
    * @param {Object} obj        Object with test configuration properties
+   * @param {Integer} count     number of times the prize has already been shown
    * @return {boolean}
    */
   Frogger.prototype.parseBoolConfig = function (obj, count) {
@@ -2543,38 +2583,29 @@
       return true;
     }
     return (obj.occurrence || 0) * count + Math.random() < obj.limit;
+
   };// ./function Frogger.prototype.parseBoolConfig(obj, count)
 
   /**
    * Prep the prize rule information
    *
-   * @param {boolean} cleanup   Need full cleanup of previous prize calculations
    * @return {undefined}
    */
-  Frogger.prototype.calculatePrizeWaits = function (cleanup) {
+  Frogger.prototype.resetPrizeWaits = function () {
     var rule, rules;
     rules = this.currentSettings.prizes;
 
     for (rule = 0; rule < rules.length; rule += 1) {
-      if (cleanup) {
-        rules[rule].tileIndex = null;
-        rules[rule].lifeTime = null;
+      rules[rule].timesShown = 0;// The prize has never been displayed
+      if (rules[rule].condition && rules[rule].condition.when) {
+        rules[rule].condition.when.failureTime = null;
       }
-      rules[rule].timesShown = 0;// The prize has never been display
-
-      // Determine delay time before rule could go into effect
-      rules[rule].active = false;
-      rules[rule].waitUntil = this.parseTimeConfig(rules[rule].condition.when);
-
-      // Determine if the rule will trigger (first time) for this level
-      rules[rule].show =
-        this.parseBoolConfig(rules[rule].condition.if, rules[rule].timesShown);
-      // Determine when a rule is to be rechecked after a previous failure
-      // Zero means never (0 is 'falsey')
-      rules[rule].againAt =
-        this.parseTimeConfig(rules[rule].condition.retry);
     }// ./for (rule = 0; rule < rules.length; rule += 1)
-  };// ./function Frogger.prototype.calculatePrizeWaits(cleanup)
+
+    this.pendingPrize.collectionTime = null;
+    this.pendingPrize.expirationTime = null;
+
+  };// ./function Frogger.prototype.resetPrizeWaits()
 
   /**
    * Get an index number from a configuration object
@@ -2605,47 +2636,68 @@
   };// ./function Frogger.prototype.pickIndex(obj)
 
   /**
-   * Find the first available prize to be shown
+   * Determine how long to wait before queueing another prize
+   *
+   * @param {Object} rule       properties are delta time rule objects
+   * @param {Integer} previous  number of times the prize has already been shown
+   * @return {Number}
+   */
+  Frogger.prototype.prizeWaitTime = function (rule, previous) {
+    var cTime, eTime, fTime, cBase, eBase, fBase;
+    cBase = this.pendingPrize.collectionTime || -999;
+    eBase = this.pendingPrize.expirationTime || -999;
+    fBase = rule.failureTime || -999;
+    cTime = cBase + this.parseTimeConfig(rule.collected, previous);
+    eTime = eBase + this.parseTimeConfig(rule.expired, previous);
+    fTime = fBase + this.parseTimeConfig(rule.failed, previous);
+    return Math.max(cTime, eTime, fTime, 0) + this.
+      parseTimeConfig(rule.increaseBy, previous);
+  };// ./function Frogger.prototype.prizeWaitTime(rule, previous)
+
+  /**
+   * Find the next available prize to be shown
    *
    * @return {undefined}
    */
   Frogger.prototype.initPendingPrize = function () {
-    var rule, rules, readyWait, readyRule, testWait, testRule;
+    var rIdx, rule, rules, minWait, canShow;
     rules = this.currentSettings.prizes;
 
+    this.pendingPrize.isShowing = false;
     this.pendingPrize.showAt = 99999;// Far future time
     this.pendingPrize.checkAt = this.pendingPrize.showAt;
-    this.pendingPrize.tileIndex = -1;
+    this.pendingPrize.tileIndex = null;
+    this.pendingPrize.rule = null;
 
-    readyWait = this.pendingPrize.showAt;
-    testWait = this.pendingPrize.showAt;
-    readyRule = -1;
-    testRule = -1;
-    for (rule = 0; rule < rules.length; rule += 1) {
-      if (rules[rule].waitUntil < readyWait && rules[rule].show) {
-        readyWait = rules[rule].waitUntil;
-        readyRule = rule;
+    for (rIdx = 0; rIdx < rules.length; rIdx += 1) {
+      minWait = this.
+        prizeWaitTime(rules[rIdx].condition.when, rules[rIdx].timesShown);
+      if (minWait < this.pendingPrize.showAt) {
+        this.pendingPrize.checkAt = minWait;
+        canShow = this.parseBoolConfig(rules[rIdx].if, rules[rIdx].timesShown);
+        if (canShow) {
+          this.pendingPrize.showAt = minWait;
+          this.pendingPrize.rule = rIdx;
+        } else {
+          // Record the failure
+          rules[rIdx].when.failureTime = this.elapsedTimes.level;
+        }
       }
-      if (rules[rule].againAt && rules[rule].againAt < testWait) {
-        testWait = rules[rule].waitUntil;
-        testRule = rule;
-      }
-    }// ./for (rule = 0; rule < rules.length; rule += 1)
+    }// ./for (rIdx = 0; rIdx < rules.length; rIdx += 1)
 
-    if (readyWait < testWait) {
-      rules[readyRule].active = true;
-      this.pendingPrize.showAt = readyWait;
-      this.pendingPrize.rule = readyRule;
-      this.pendingPrize.tileIndex = this.APP_CONFIG.prizes.tileIndex +
-        this.pickIndex(rules[readyRule].constraints.tileIndex);
-      this.pendingPrize.lifeTime = this.parseTimeConfig(rules[readyRule].time);
-      // Position needs to be determined when actually placed, to account for
-      // the (then) current location of the avatar
-      return;
-    }
+    if (this.pendingPrize.rule === null) { return; }
 
-    this.pendingPrize.checkAt = testWait;// Could be 99999 and -1
-    this.pendingPrize.rule = testRule;
+    // Need to handle case where no prize was currently found to show, but an
+    // attempt (this or previous call) was made that failed: need to check
+    // again later, after failureTime expires
+    rule = rules[this.pendingPrize.rule];
+    this.pendingPrize.tileIndex = this.APP_CONFIG.prizes.tileIndex +
+      this.pickIndex(rule.constraints.tileIndex);
+    this.pendingPrize.lifeTime = this.parseTimeConfig(rule.time, rule.timesShown);
+
+    // Position needs to be determined when actually placed, to be able to
+    // account for the (then) current location of the avatar
+    return;
   };// ./function Frogger.prototype.initPendingPrize()
 
   /**
@@ -2654,7 +2706,7 @@
    * @return {undefined}
    */
   Frogger.prototype.loadSettings = function () {
-    var gamConfig, lvlConfig, reusePrizes;
+    var gamConfig, lvlConfig;
     gamConfig = this.APP_CONFIG.game.levels[this.lvlIndex];
     lvlConfig = this.APP_CONFIG.enemy.levels[this.lvlIndex];
 
@@ -2665,7 +2717,6 @@
     this.currentSettings.player.sizeFactor = configUpdate.call(gamConfig,
       this.currentSettings.player.sizeFactor, ENUMS.SETTINGS.sizeFactor
       );
-    reusePrizes = true;
     if (gamConfig !== undefined) {
       if (gamConfig.goal) {
         // Just replace the whole array.  There does not seem to be a good (and
@@ -2679,13 +2730,12 @@
       // nestedConfigUpdate.
       //   call(gamConfig, this.currentSettings, ENUMS.SETTINGS.prizes);
       if (gamConfig.prizes) {
-        reusePrizes = false;// No old prize calculation left to clear
         delete this.currentSettings.prizes;
         // Need copy, since (easiest) processing updates information
         this.currentSettings.prizes = deepCopyOf(gamConfig.prizes);
       }
     }// ./if (gamConfig !== undefined)
-    this.calculatePrizeWaits(reusePrizes);
+    this.resetPrizeWaits();
     this.initPendingPrize();
 
     // Update the reward rules/configuration for the level
@@ -2693,7 +2743,8 @@
       call(gamConfig, this.currentSettings, ENUMS.SETTINGS.rewards);
 
     // lvlConfig needs to always exist.  The pattern information is complex
-    // enough to make cloning and modifying from previous levels 'problematic'
+    // enough to make cloning and modifying from previous levels 'problematic'.
+    // At least if multiple patterns are allowed in a single level
     this.currentSettings.enemy.sizeFactor = configUpdate.call(lvlConfig,
       this.currentSettings.enemy.sizeFactor, ENUMS.SETTINGS.sizeFactor
       );
@@ -2886,7 +2937,7 @@
     // on the canvas at a time (with current implementation)
     cfg = this.APP_CONFIG.prizes;
     this.prizes[0] = new Prize(cfg.verticalOffset, cfg.horizontalOffset, gridCell,
-      tiles, cvsContext
+      tiles, cvsContext, { "context" : this, "expired" : this.prizeExpired }
       );
 
     // Due to the scope of where it is currently being created, the PaceCar
@@ -3087,6 +3138,9 @@
         // time, either the life left on the prize, or for the level.
         // this.collectReward(this.prizes[prize].sprite, <<timeMultipler>>);
         this.collectReward(this.prizes[prize].sprite);
+        this.prizes[prize].collected();
+        this.pendingPrize.collectionTime = this.elapsedTimes.level;
+        this.initPendingPrize();
       }
     }
   };// ./function Frogger.prototype.collectPrizes()
@@ -3233,7 +3287,6 @@
       break;
     case ENUMS.STATE.resurrect:
       this.player.resurrect();
-      this.initLevel();
       break;
     case ENUMS.STATE.donelevel:
       this.levelComplete();
@@ -3361,9 +3414,11 @@
 
     // 'Tag' locations that are closer to the avatar than allowed
     mat[aCol][aRow] = true;
-    this.tooCloseTotal(mat, rules.total, aRow, aCol);
-    this.tooCloseHorizontal(mat, rules.horizontal, aCol);
-    this.tooCloseVertical(mat, rules.vertical, aRow);
+    if (rules) {
+      this.tooCloseTotal(mat, rules.total, aRow, aCol);
+      this.tooCloseHorizontal(mat, rules.horizontal, aCol);
+      this.tooCloseVertical(mat, rules.vertical, aRow);
+    }
 
     return mat;
   };// ./function Frogger.prototype.tooClose(rules)
@@ -3454,27 +3509,36 @@
   };// ./function Frogger.prototype.pickPrizeLocation()
 
   /**
+   *
+   *
+   * @return {undefined}
+   */
+  Frogger.prototype.prizeExpired = function () {
+    this.pendingPrize.expirationTime = this.elapsedTimes.level;
+    this.initPendingPrize();
+  };// ./function Frogger.prototype.prizeExpired()
+
+  /**
    * Add prizes to the canvas, when they are ready to go
    *
    * @return {undefined}
    */
   Frogger.prototype.showPrize = function () {
-    if (this.pendingPrize.isShowing) {
-      if (this.prizes[this.pendingPrize.prize].timeToLive <= 0) {
-        this.pendingPrize.isShowing = false;
-      }
-    }
     if (!this.pendingPrize.isShowing) {
       if (this.pendingPrize.showAt <= this.elapsedTimes.level) {
         if (this.pickPrizeLocation()) {
-          this.pendingPrize.queued = true;
+          this.prizes[this.pendingPrize.prize].place(this.pendingPrize);
+          this.currentSettings.prizes[this.pendingPrize.rule].timesShown += 1;
+          this.pendingPrize.isShowing = true;
         }
       } else {
-        if (this.pendingPrize.CheckAt <= this.elapsedTimes.level) {
-          return undefined;// Stub
+        if (this.pendingPrize.checkAt <= this.elapsedTimes.level) {
+          // When could not queue a prize, but need to check again.
+          this.initPendingPrize();
         }
       }
     }// ./if (!this.pendingPrize.isShowing)
+    return;// Dummy to aid breakpoint positioning
   };// ./function Frogger.prototype.showPrize()
 
   /**
@@ -3506,18 +3570,15 @@
 
       // Add any pending prize to the screen that is due
       this.showPrize();
-    }
 
-    // Check for level time limit exceeded
-    if (this.elapsedTimes.level > this.currentSettings.levelTime) {
-      // Time has expired for the current level.  Avatar dies (from exposure)
-      this.reason = 'from exposure @' +
-        Number(this.elapsedTimes.level).toFixed(1) + ' on level ' +
-        this.level + ', with limit of ' + this.currentSettings.levelTime;
-      this.state = ENUMS.STATE.dieing;
-      return;
-      // No point in adjusting patterns or enemies while dieing.  They are going
-      // to get reset right away anyway.
+      // Check for level time limit exceeded
+      if (this.elapsedTimes.level > this.currentSettings.levelTime) {
+        // Time has expired for the current level.  Avatar dies (from exposure)
+        this.reason = 'from exposure @' +
+          Number(this.elapsedTimes.level).toFixed(1) + ' on level ' +
+          this.level + ', with limit of ' + this.currentSettings.levelTime;
+        this.state = ENUMS.STATE.dieing;
+      }
     }
 
     // Check for expired patterns
@@ -3536,14 +3597,6 @@
     if (this.state === ENUMS.STATE.select) {
       this.player.showSelections();
     }
-
-    // Queue next prize for display
-    if (this.pendingPrize.queued) {
-      this.pendingPrize.queued = false;
-      this.prizes[this.pendingPrize.prize].place(this.pendingPrize);
-      this.currentSettings.prizes[this.pendingPrize.rule].timesShown += 1;
-      this.pendingPrize.isShowing = true;
-    }// ./if (this.pendingPrize.queued)
   };// function Frogger.prototype.preRender()
 
   /////////////////////////////////
