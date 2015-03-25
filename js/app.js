@@ -1236,7 +1236,7 @@
       this.lvlIndex = -1; //So increment will get to level 0 (displayed as 1)
     }
     this.lvlIndex += 1;
-    this.elapsedTimes.level = 0;
+    this.elapsedTimes[ENUMS.STATE.running] = 0;
     this.elapsedTimes.timeSpeed = 1;
     if (this.lvlIndex === 0) {
       // Start of (new) game
@@ -1299,7 +1299,13 @@
     // Process the requested 'transition to' state
     switch (newState) {
     case ENUMS.STATE.waiting:
-      this.elapsedTimes.level = 0.0001;// Enough to trigger initial pattern change
+      this.elapsedTimes[ENUMS.STATE.running] = 0.0001;// trigger pattern change
+      // Include previous select state time, for ENUMS.CHANGE.delayed time passed
+      this.elapsedTimes[ENUMS.STATE.waiting] = 0;
+      if (this.finiteState.current === ENUMS.STATE.select) {
+        // Include previous select state in ENUMS.CHANGE.delayed elapsed time
+        this.elapsedTimes[ENUMS.STATE.waiting] += this.elapsedTimes.state;
+      }
       this.finiteState.next = ENUMS.STATE.running;
       this.finiteState.changeOn = ENUMS.CHANGE.delayed;
       break;
@@ -1319,9 +1325,11 @@
       tmpMsg.text = tmpMsg.text.replace('{1}', this.reason);
       this.tracker.message = tmpMsg;
 
-      if (this.elapsedTimes.level > this.currentSettings.levelTime) {
+      if (this.elapsedTimes[ENUMS.STATE.running] >
+          this.currentSettings.levelTime
+          ) {
         // Prevent display of "-0.0" when time expires
-        this.elapsedTimes.level = this.currentSettings.levelTime;
+        this.elapsedTimes[ENUMS.STATE.running] = this.currentSettings.levelTime;
       }
 
       this.finiteState.next = ENUMS.STATE.resurrect;
@@ -1407,12 +1415,12 @@
     // most states, but will never conflict.  Anywhere it WOULD conflict gets
     // its own separate property in this.elapsedTimes
     this.elapsedTimes.state += deltaTime;
-    if (this.state === ENUMS.STATE.running) {
-      // Only increase the elapsed level time when the application is running
-      this.elapsedTimes.level += deltaTime;
+    if (this.elapsedTimes[this.state] !== undefined) {
+      // Increase any specified state specific time
+      this.elapsedTimes[this.state] += deltaTime;
     }
     if (this.elapsedTimes.timeSpeed > this.currentSettings.baseSpeed) {
-      if (this.elapsedTimes.state > this.currentSettings.fillTime) {
+      if (this.elapsedTimes[this.state] > this.currentSettings.fillTime) {
         this.elapsedTimes.timeSpeed = this.currentSettings.baseSpeed;
         this.finiteState.changeOn = ENUMS.CHANGE.now;
       }
@@ -1808,7 +1816,8 @@
       ctx.font = hud.headline.valuesfont;
       ctx.fillStyle = hud.values.style;
 
-      tm = this.owner.currentSettings.levelTime - this.owner.elapsedTimes.level;
+      tm = this.owner.currentSettings.levelTime -
+        this.owner.elapsedTimes[ENUMS.STATE.running];
       tmStr = Number(tm).toFixed(1);
       //zfStr = (tm < 99.5) ? ('00' + tmStr).slice(-4) : tmStr;//leading zeros
       placeValue.call(ctx, tmStr, hud.values.time,
@@ -2095,15 +2104,15 @@
       "enemy" : {
         "tileIndex" : 0,
         "verticalOffset" : -20,
-        "maxSprites" : [3, 4, 4],
+        "maxSprites" : [4, 4, 4],
         "topRow" : 1,
         "levels" : [
-          {// json level 0 start
+          {
             "sizeFactor" : 1.0,
             "fillTime" : 10,
             "baseSpeed" : 1,
             "fillSpeed" : 5,
-            "rows" : [
+            "rows" : [// json level 1 start
               [
                 {
                   "speed" : 80,
@@ -2122,10 +2131,10 @@
                   "distances" : [2.8, 2.8, 2.8, 5.6]
                 }
               ]
-            ]
-          },// json level 0 end
-          {// json level 1 start
-            "rows" : [
+            ]// json level 1 end
+          },
+          {
+            "rows" : [// json level 2 start
               [
                 {
                   "speed" : 80,
@@ -2136,7 +2145,7 @@
                 {
                   "startDistance" : 1,
                   "speed" : -50,
-                  "distances" : [-3.5, -3.5, -3.5, -6.8]
+                  "distances" : [-3.5, -3.5, -3.5, -7]
                 }
               ],
               [
@@ -2145,8 +2154,76 @@
                   "distances" : [3.5]
                 }
               ]
-            ]
-          }// json level 1 end
+            ]// json level 2 end
+          },
+          {
+            "rows" : [// json level 3 start
+              [
+                {
+                  "speed" : 70,
+                  "distances" : [0.7, 0.7, 5]
+                }
+              ],
+              [
+                {
+                  "startDistance" : 1,
+                  "speed" : -55,
+                  "distances" : [-3.5, -3.5, -3.5, -7]
+                }
+              ],
+              [
+                {
+                  "speed" : 45,
+                  "distances" : [3.5]
+                }
+              ]
+            ]// json level 3 end
+          },
+          {
+            "rows" : [// json level 99 start
+              [
+                {
+                  "speed" : 150,
+                  "distances" : [0.9, 0.9, 5]
+                }
+              ],
+              [
+                {
+                  "startDistance" : 1.2,
+                  "speed" : -75,
+                  "distances" : [-3.5, -3.5, -3.5, -7.5]
+                }
+              ],
+              [
+                {
+                  "speed" : 65,
+                  "distances" : [3.5, 3.5, 2.5]
+                }
+              ]
+            ]// json level 99 end
+          },
+          {
+            "rows" : [// json level 1 start
+              [
+                {
+                  "speed" : 80,
+                  "distances" : [1, 6]
+                }
+              ],
+              [
+                {
+                  "speed" : -40,
+                  "distances" : [-2.8, -2.8, -2.8, -5.6]
+                }
+              ],
+              [
+                {
+                  "speed" : 40,
+                  "distances" : [2.8, 2.8, 2.8, 5.6]
+                }
+              ]
+            ]// json level 1 end
+          }
         ],// json levels[] end
         "reset" : {
           "expires" : { "writable": true, "configurable": true, "value": 0 },
@@ -2185,8 +2262,8 @@
       },
       "game" : {
         "levels" : [
-          {
-            "length" : 10,
+          {// json level 1 start
+            "length" : 60,
             "sizeFactor" : 0.5,
             "rewards" : {
               "goal" : {
@@ -2221,7 +2298,7 @@
                     }
                   },
                   "if" : {
-                    "occurrence" : 1,
+                    "occurrence" : .2,
                     "limit" : 1
                   }
                 },
@@ -2235,8 +2312,8 @@
                 }
               }
             ]
-          },
-          {
+          },// json level 1 end
+          {// json level 2 start
             "sizeFactor" : 0.6,
             "rewards" : {
               "goal" : {
@@ -2245,7 +2322,86 @@
                 }
               }
             }
-          }
+          },// json level 2 start
+          {// json level 3 start
+            "rewards" : {
+              "images/Gem Green.png" : {
+                "score" : 40
+              },
+              "goal" : {
+                "delta" : {
+                  "score" : 5
+                }
+              }
+            },
+            "prizes" : [
+              {
+                "condition" : {
+                  "when" : {
+                    "collected" : {
+                      "base" : 1,
+                      "fixed" : 1
+                    },
+                    "expired" : {
+                      "fixed" : 1
+                    },
+                    "increaseBy" : {
+                      "base" : 2
+                    }
+                  },
+                  "if" : {
+                    "occurrence" : .2,
+                    "limit" : 1
+                  }
+                },
+                "constraints" : {
+                  "tileIndex" : 0,
+                  "row" : 0,
+                  "col" : [1, 1, 1, 1, 1]
+                },
+                "time" : {
+                  "base" : 5
+                }
+              },
+              {
+                "condition" : {
+                  "when" : {
+                    "collected" : {
+                      "base" : 1,
+                      "fixed" : 1
+                    },
+                    "expired" : {
+                      "fixed" : 1
+                    },
+                    "increaseBy" : {
+                      "base" : 2
+                    }
+                  },
+                  "if" : {
+                    "occurrence" : 1,
+                    "limit" : 1
+                  }
+                },
+                "constraints" : {
+                  "tileIndex" : 1,
+                  "row" : [0, 0, 0, 0, 1, 1],
+                  "col" : [1, 1, 1, 1, 1]
+                },
+                "time" : {
+                  "base" : 7
+                }
+              }
+            ]
+          },// json level 3 end
+          {// json level 99 start
+            "rewards" : {
+              "goal" : {
+                "delta" : {
+                  "score" : 1
+                }
+              }
+            }
+          }// json level 99 end
         ]
       },
       "hud" : {
@@ -2506,7 +2662,7 @@
     switch (request.command) {
     case 'space':
       if (this.finiteState.changeOn === ENUMS.CHANGE.delayed) {
-        if (this.elapsedTimes.state >= this.currentSettings.fillTime) {
+        if (this.elapsedTimes[this.state] >= this.currentSettings.fillTime) {
           // Enough time already passed: convert to triggered change
           this.finiteState.changeOn = ENUMS.CHANGE.trigger;
         } else {
@@ -2518,6 +2674,13 @@
       if (this.finiteState.changeOn === ENUMS.CHANGE.trigger) {
         this.finiteState.changeOn = ENUMS.CHANGE.now;
         this.tracker.scrollMessage = false;// Don't care if [not] scrolling
+      }
+      break;
+    case 'numplus':// DEBUG; cheat code
+      if (this.state === ENUMS.STATE.running) {
+        this.lvlIndex += 1;
+        this.lives += 1;
+        this.state = ENUMS.STATE.dieing;
       }
       break;
     }
@@ -2683,13 +2846,15 @@
         prizeWaitTime(rules[rIdx].condition.when, rules[rIdx].timesShown);
       if (minWait < this.pendingPrize.showAt) {
         this.pendingPrize.checkAt = minWait;
-        canShow = this.parseBoolConfig(rules[rIdx].if, rules[rIdx].timesShown);
+        canShow = this.
+          parseBoolConfig(rules[rIdx].condition.if, rules[rIdx].timesShown);
         if (canShow) {
           this.pendingPrize.showAt = minWait;
           this.pendingPrize.rule = rIdx;
         } else {
           // Record the failure
-          rules[rIdx].when.failureTime = this.elapsedTimes.level;
+          rules[rIdx].condition.when.failureTime =
+            this.elapsedTimes[ENUMS.STATE.running];
         }
       }
     }// ./for (rIdx = 0; rIdx < rules.length; rIdx += 1)
@@ -2861,7 +3026,7 @@
           this.lives += bonusValue;
           break;
         case ENUMS.BONUS.time:
-          this.elapsedTimes.level -= bonusValue;
+          this.elapsedTimes[ENUMS.STATE.running] -= bonusValue;
           break;
         case ENUMS.BONUS.speed:
           // need a multiplier to use with sprite speed in Enemy.update
@@ -2887,7 +3052,8 @@
     var bonusTime, tmpMsg;
 
     //this.freezeEnemies();// Done in state transition
-    bonusTime = this.currentSettings.levelTime - this.elapsedTimes.level;
+    bonusTime = this.currentSettings.levelTime -
+      this.elapsedTimes[ENUMS.STATE.running];
     tmpMsg = deepCopyOf(this.APP_CONFIG.hud.statusline.templates.levelComplete);
     tmpMsg.text = textInterpolate.call(tmpMsg.text,
       [this.level, Number(bonusTime.toFixed(1))]);
@@ -2990,6 +3156,7 @@
     // Listen for key presses, and send them to (avatar) handleInput
     document.addEventListener('keyup', function (e) {
       var allowedKeys = {
+        107: 'numplus',// DEBUG; cheat code
         32: 'space',
         37: 'left',
         38: 'up',
@@ -3071,7 +3238,7 @@
 
     for (row = 0; row < this.currentPatterns.length; row += 1) {
       rowState = this.currentPatterns[row];
-      if (this.elapsedTimes.level >= rowState.expires) {
+      if (this.elapsedTimes[ENUMS.STATE.running] >= rowState.expires) {
         rowConfig = lvlConfig.rows[row];
         // Index into rowConfig for the active pattern, increment and wrap to
         // zero when >= .length
@@ -3102,15 +3269,16 @@
         if (ptrnConfig.seconds) {
           rowState.seconds = ptrnConfig.seconds;
         }
-        // NOTE: Design decision: Do not adjust for the actual elapsed time.
-        // rowState.expires = this.elapsedTimes.level + rowState.seconds;
+        // NOTE: Design decision: No adjust for the actual elapsed state time.
+        // rowState.expires = this.elapsedTimes[ENUMS.STATE.running] +
+        //   rowState.seconds;
         // Set the time when the new pattern ends, and the following one starts
         rowState.expires += rowState.seconds;
 
         // Activate the first (leading) sprite in the new pattern
         this.initPattern(row, ptrnConfig.startDistance);
 
-      }// ./if (this.elapsedTimes.level >= rowState.expires)
+      }// ./if (this.elapsedTimes[ENUMS.STATE.running] >= rowState.expires)
     }// ./for (row = 0; row < this.currentPatterns.length; row += 1)
   };// ./function Frogger.prototype.cycleEnemyPatterns()
 
@@ -3156,7 +3324,7 @@
         // this.collectReward(this.prizes[prize].sprite, <<timeMultipler>>);
         this.collectReward(this.prizes[prize].sprite);
         this.prizes[prize].collected();
-        this.pendingPrize.collectionTime = this.elapsedTimes.level;
+        this.pendingPrize.collectionTime = this.elapsedTimes[ENUMS.STATE.running];
         this.initPendingPrize();
       }
     }
@@ -3531,7 +3699,7 @@
    * @return {undefined}
    */
   Frogger.prototype.prizeExpired = function () {
-    this.pendingPrize.expirationTime = this.elapsedTimes.level;
+    this.pendingPrize.expirationTime = this.elapsedTimes[ENUMS.STATE.running];
     this.initPendingPrize();
   };// ./function Frogger.prototype.prizeExpired()
 
@@ -3542,14 +3710,14 @@
    */
   Frogger.prototype.showPrize = function () {
     if (!this.pendingPrize.isShowing) {
-      if (this.pendingPrize.showAt <= this.elapsedTimes.level) {
+      if (this.pendingPrize.showAt <= this.elapsedTimes[ENUMS.STATE.running]) {
         if (this.pickPrizeLocation()) {
           this.prizes[this.pendingPrize.prize].place(this.pendingPrize);
           this.currentSettings.prizes[this.pendingPrize.rule].timesShown += 1;
           this.pendingPrize.isShowing = true;
         }
       } else {
-        if (this.pendingPrize.checkAt <= this.elapsedTimes.level) {
+        if (this.pendingPrize.checkAt <= this.elapsedTimes[ENUMS.STATE.running]) {
           // When could not queue a prize, but need to check again.
           this.initPendingPrize();
         }
@@ -3583,17 +3751,20 @@
     // check for collisions before time limits, so it is possible to finish a
     // level just as the time is running out.
     if (this.state === ENUMS.STATE.running) {
-      this.collisionCheck();
+      if (this.collisionCheck()) { return; }
 
       // Add any pending prize to the screen that is due
       this.showPrize();
 
       // Check for level time limit exceeded
-      if (this.elapsedTimes.level > this.currentSettings.levelTime) {
+      if (this.elapsedTimes[ENUMS.STATE.running] >
+          this.currentSettings.levelTime
+          ) {
         // Time has expired for the current level.  Avatar dies (from exposure)
         this.reason = 'from exposure @' +
-          Number(this.elapsedTimes.level).toFixed(1) + ' on level ' +
-          this.level + ', with limit of ' + this.currentSettings.levelTime;
+          Number(this.elapsedTimes[ENUMS.STATE.running]).toFixed(1) +
+          ' on level ' + this.level + ', with limit of ' +
+          this.currentSettings.levelTime;
         this.state = ENUMS.STATE.dieing;
       }
     }

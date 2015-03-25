@@ -30,6 +30,18 @@ Students should use this rubric: https://www.udacity.com/course/viewer#!/c-ud015
 
 for self-checking their submission.
 
+Usage Notes
+===========
+
+A cheat code (key) has been added to advance levels quickly for viewing.  The
+way the level information can carry forward though means there are limitations.
+To 'level up', start a level (the clock is running), then press the plus (+) key
+on the numeric keypad.  That will increase the level, add a life, then kill the
+avatar.  Press the space bar to abort the death message, space again to start
+the new level, and wait for the sped up filling to finish.  Repeat to get to the
+target level.  This sequence is needed to make sure that the cascading level
+configuration gets carried forward correctly.
+
 Future version enhancements
 ===========================
 
