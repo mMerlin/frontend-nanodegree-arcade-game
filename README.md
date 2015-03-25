@@ -51,20 +51,24 @@ Ideas:
 - increase from point to full size, without spin
 
 setStateNewlevel
-Implement method of getting board 'filled' with enemies before allowing allowing Avatar to move, or clock to start
+Look at other alternatives for getting board 'filled' with enemies before allowing Avatar to move, or clock to start
 Ideas:
-- configurable delay after initLevel
 - wait until enemy crosses board
--- any row
--- all rows
+-- any/all/last(slowest) row
 -- 'nose' touches far side
-- With any of above, increase the time flow rate to get there faster
--- timeCop() modification
+-- less than (player) sizeFactor from far edge
 -- Could jump time to get to 'filled' state
 --- loop Frogger.prototype.next until conditions satisfied, render optional
-- ignore / truncate if level was not started before 'fill' conditions were met
 - ignore 'start' command until board has been filled
 - change messaging to show [not] ready
+- new 'fastForward' state to handle processing
+-- instead of checking elapsedTimes.timeSpeed
+
+Frogger.prototype.initPattern
+Handle more pattern scenarios
+- change pattern mid level
+- start first enemy of new pattern (distance) behind last visible sprite
+- change speed, and handle 'tailgate' conditions with previous pattern
 
 Frogger.prototype.playerEnemyCheck
 check how much overlap there is on a collision, and adjust the displayed message.  If little overlap, probably the avatar was sitting still, and the enemy ran them over (hit and run).  If the overlap is large, probably the avatar moved, running into the enemy (suicide by enemy).

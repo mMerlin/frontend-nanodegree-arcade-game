@@ -263,9 +263,10 @@
   }// ./function deepCopyOf(obj)
 
   /**
-   * Reduce very large frame animation time delays to a small value.
+   * Adjust time flow rate, and time jumps
    *
-   * Helps keep code 'sane' when frames are stopped while a browser tab is not
+   * Reduce very large frame animation time delays to a small value.  This helps
+   * keep code 'sane' when frames are stopped while a browser tab is not
    * displayed, or while using breakpoints to debug code.  This is to be used to
    * limit all (and only) delta time values supplied by the animation engine.
    *
@@ -273,7 +274,7 @@
    * @returns {Number}
    */
   function timeCop(deltaTime) {
-    return deltaTime > 0.75 ? 0.01 : deltaTime;
+    return (deltaTime > 0.75 ? 0.01 : deltaTime) * app.elapsedTimes.timeSpeed;
   }// ./function timeCop(deltaTime)
 
   /**
@@ -1112,7 +1113,7 @@
       "never" : "Never",
       "now" : "Now",
       "trigger" : "Trigger",
-      "elapsed" : "Elapsed"
+      "delay" : "Delay"
     },
     "TRANSITIONS" : {},
     "BONUS" : {
@@ -1129,7 +1130,10 @@
     },
     "SETTINGS" : {
       "sizeFactor" : "sizeFactor",
-      "rewards" : "rewards"
+      "rewards" : "rewards",
+      "fillTime" : "fillTime",
+      "baseSpeed" : "baseSpeed",
+      "fillSpeed" : "fillSpeed"
     }
   };
   // Lookup for valid state transitions: target from (one of) current)
@@ -1233,6 +1237,7 @@
     }
     this.lvlIndex += 1;
     this.elapsedTimes.level = 0;
+    this.elapsedTimes.timeSpeed = 1;
     if (this.lvlIndex === 0) {
       // Start of (new) game
       this.lives = this.APP_CONFIG.player.start.lives;
@@ -1296,7 +1301,7 @@
     case ENUMS.STATE.waiting:
       this.elapsedTimes.level = 0.0001;// Enough to trigger initial pattern change
       this.finiteState.next = ENUMS.STATE.running;
-      this.finiteState.changeOn = ENUMS.CHANGE.trigger;
+      this.finiteState.changeOn = ENUMS.CHANGE.delayed;
       break;
 
     case ENUMS.STATE.running:
@@ -1320,8 +1325,6 @@
       }
 
       this.finiteState.next = ENUMS.STATE.resurrect;
-      // this.finiteState.delay = 5;//seconds for death throes
-      // this.changeOn = ENUMS.CHANGE.elapsed;
       this.finiteState.changeOn = ENUMS.CHANGE.trigger;
       this.finiteState.doCurrent = true;
       break;
@@ -1407,6 +1410,12 @@
     if (this.state === ENUMS.STATE.running) {
       // Only increase the elapsed level time when the application is running
       this.elapsedTimes.level += deltaTime;
+    }
+    if (this.elapsedTimes.timeSpeed > this.currentSettings.baseSpeed) {
+      if (this.elapsedTimes.state > this.currentSettings.fillTime) {
+        this.elapsedTimes.timeSpeed = this.currentSettings.baseSpeed;
+        this.finiteState.changeOn = ENUMS.CHANGE.now;
+      }
     }
   }// ./function manageTime(deltaTime)
 
@@ -2091,27 +2100,24 @@
         "levels" : [
           {// json level 0 start
             "sizeFactor" : 1.0,
+            "fillTime" : 10,
+            "baseSpeed" : 1,
+            "fillSpeed" : 5,
             "rows" : [
               [
                 {
-                  "seconds" : 60,
-                  "startDistance" : 0,
                   "speed" : 80,
                   "distances" : [1, 6]
                 }
               ],
               [
                 {
-                  "seconds" : 60,
-                  "startDistance" : 0,
                   "speed" : -40,
                   "distances" : [-2.8, -2.8, -2.8, -5.6]
                 }
               ],
               [
                 {
-                  "seconds" : 60,
-                  "startDistance" : 0,
                   "speed" : 40,
                   "distances" : [2.8, 2.8, 2.8, 5.6]
                 }
@@ -2122,24 +2128,19 @@
             "rows" : [
               [
                 {
-                  "seconds" : 60,
-                  "startDistance" : 0,
                   "speed" : 80,
                   "distances" : [1, 6, 6]
                 }
               ],
               [
                 {
-                  "seconds" : 60,
-                  "startDistance" : 0,
+                  "startDistance" : 1,
                   "speed" : -50,
                   "distances" : [-3.5, -3.5, -3.5, -6.8]
                 }
               ],
               [
                 {
-                  "seconds" : 60,
-                  "startDistance" : 0,
                   "speed" : 50,
                   "distances" : [3.5]
                 }
@@ -2158,7 +2159,7 @@
           "nxtDistance" : { "writable": true, "configurable": true, "value": 0 },
           "cntDistances" :
             { "writable": true, "configurable": true, "value": 0 },
-          "seconds" : { "writable": true, "configurable": true, "value": 0 }
+          "seconds" : { "writable": true, "configurable": true, "value": 9999 }
         }
       },
       "player" : {
@@ -2236,15 +2237,13 @@
             ]
           },
           {
+            "sizeFactor" : 0.6,
             "rewards" : {
               "goal" : {
                 "delta" : {
                   "score" : 5
                 }
               }
-            },
-            "delta" : {
-              "sizeFactor" : 0.1
             }
           }
         ]
@@ -2506,6 +2505,16 @@
   Frogger.prototype.handleCommand = function (request) {
     switch (request.command) {
     case 'space':
+      if (this.finiteState.changeOn === ENUMS.CHANGE.delayed) {
+        if (this.elapsedTimes.state >= this.currentSettings.fillTime) {
+          // Enough time already passed: convert to triggered change
+          this.finiteState.changeOn = ENUMS.CHANGE.trigger;
+        } else {
+          // Speedup time until get to the minimum trigger time
+          this.elapsedTimes.timeSpeed = this.currentSettings.fillSpeed;
+        }
+      }
+
       if (this.finiteState.changeOn === ENUMS.CHANGE.trigger) {
         this.finiteState.changeOn = ENUMS.CHANGE.now;
         this.tracker.scrollMessage = false;// Don't care if [not] scrolling
@@ -2747,6 +2756,15 @@
     // At least if multiple patterns are allowed in a single level
     this.currentSettings.enemy.sizeFactor = configUpdate.call(lvlConfig,
       this.currentSettings.enemy.sizeFactor, ENUMS.SETTINGS.sizeFactor
+      );
+    this.currentSettings.fillTime = configUpdate.call(lvlConfig,
+      this.currentSettings.fillTime, ENUMS.SETTINGS.fillTime
+      );
+    this.currentSettings.baseSpeed = configUpdate.call(lvlConfig,
+      this.currentSettings.baseSpeed, ENUMS.SETTINGS.baseSpeed
+      );
+    this.currentSettings.fillSpeed = configUpdate.call(lvlConfig,
+      this.currentSettings.fillSpeed, ENUMS.SETTINGS.fillSpeed
       );
   };// /.function Frogger.prototype.loadSettings()
 
@@ -3011,15 +3029,14 @@
    * @return {undefined}
    */
   Frogger.prototype.initPattern = function (rowIndex, startDistance) {
-    var sprites, pattern;
+    var sprites, pattern, offset;
     pattern = this.currentPatterns[rowIndex];
     sprites = this.enemySprites[rowIndex];
 
     // This needs to be smarter to handle more of the intended cases.  For now,
     // just get it setup for the base case of one pattern per level, but add
     // sanity checks to make sure that is REALLY the scenario.
-    if (startDistance !== 0 ||
-        pattern.head !== 0 ||
+    if (pattern.head !== 0 ||
         pattern.tail !== 1 ||
         sprites[pattern.tail].speed !== 0 ||
         sprites[pattern.head].speed !== 0 ||
@@ -3030,13 +3047,13 @@
         );
     }
 
-    // startDistance === 0; replace existing sprite settings
-    // sprites[vSprite].isOffEnd(); use pattern.tail
+    // replace existing sprite settings
+    offset = (startDistance || 0) * this.GAME_BOARD.cellSize.width;
     sprites[pattern.tail].speed = pattern.speed;
     if (pattern.speed < 0) {
-      sprites[pattern.tail].position.x = this.limits.offRightX;
+      sprites[pattern.tail].position.x = this.limits.offRightX + offset;
     } else {
-      sprites[pattern.tail].position.x = this.limits.offLeftX;
+      sprites[pattern.tail].position.x = this.limits.offLeftX - offset;
     }
   };// ./function Frogger.prototype.initPattern(rowIndex, startDistance)
 
