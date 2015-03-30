@@ -1131,7 +1131,6 @@
     "SETTINGS" : {
       "sizeFactor" : "sizeFactor",
       "rewards" : "rewards",
-      "fillTime" : "fillTime",
       "baseSpeed" : "baseSpeed",
       "fillSpeed" : "fillSpeed"
     }
@@ -1232,17 +1231,15 @@
   function setStateNewlevel() {
     /* jshint validthis: true */
     if (this.resetGame) {
+      // Start of (new) game
       this.resetGame = false;
       this.lvlIndex = -1; //So increment will get to level 0 (displayed as 1)
+      this.lives = this.APP_CONFIG.player.start.lives;
+      this.score = 0;
     }
     this.lvlIndex += 1;
     this.elapsedTimes[ENUMS.STATE.running] = 0;
     this.elapsedTimes.timeSpeed = 1;
-    if (this.lvlIndex === 0) {
-      // Start of (new) game
-      this.lives = this.APP_CONFIG.player.start.lives;
-      this.score = 0;
-    }
 
     // Currently, if run out of level configurations, there is no way to
     // continue.
@@ -1275,7 +1272,7 @@
    * @return {string}
    */
   function setState(newState) {
-    /* jshint validthis: true, maxcomplexity: 15 */
+    /* jshint validthis: true, maxcomplexity: 16 */
     var lockStatus, tmpMsg;
     lockStatus = this.finiteState.lock;
     this.finiteState.lock = true;
@@ -2039,6 +2036,8 @@
      *       collected {Object} <<delta_time>> object; min time after collection
      *       expired {Object} <<delta_time>> object: min time after expired
      *       failed {Object}  <<delta_time>> object: min time after failed
+     *       elapsed {Object} <<delta_time>> object: min elpased level time
+     *       checked {Object} <<delta_time>> object: min time after previous check
      *     if {Object}        <<bool_check> object
      *   constraints {Object}
      *     tileIndex {Object} Single Integer, or Array of Integer
@@ -2052,10 +2051,12 @@
      *   additional {Number}  b.delta
      *   fixed {Number}       a.fixed
      *   delta {Number}       a.delta
-     * <<bool_check> {Object} occ * count + random < limit
-     *   occurrence {Number}
+     * <<bool_check> {Object} ax + b < limit; x = times shown,
+     *                        a = fixed + delta * random()
+     *   fixed {Number}       a.fixed
+     *   delta {Number}       a.delta
+     *   weight {Number}      b = weight * random()
      *   limit {Number}
-
      *
      * hud {Object}
      *   headline {Object}    Configuration for drawing text at canvas top
@@ -2104,127 +2105,278 @@
       "enemy" : {
         "tileIndex" : 0,
         "verticalOffset" : -20,
-        "maxSprites" : [4, 4, 4],
+        "maxSprites" : [5, 4, 4],
         "topRow" : 1,
         "levels" : [
           {
+            "levelstart" : 1,
             "sizeFactor" : 1.0,
-            "fillTime" : 10,
             "baseSpeed" : 1,
             "fillSpeed" : 5,
-            "rows" : [// json level 1 start
-              [
-                {
-                  "speed" : 80,
-                  "distances" : [1, 6]
-                }
-              ],
-              [
-                {
-                  "speed" : -40,
-                  "distances" : [-2.8, -2.8, -2.8, -5.6]
-                }
-              ],
-              [
-                {
-                  "speed" : 40,
-                  "distances" : [2.8, 2.8, 2.8, 5.6]
-                }
-              ]
-            ]// json level 1 end
+            "rows" : [
+              [ { "speed" :   80, "distances" : [ 1,    6,    6        ] } ],
+              [ { "startDistance" : 1,
+                  "speed" :  -50, "distances" : [-3.5, -3.5, -3.5, -7  ] } ],
+              [ { "speed" :   50, "distances" : [ 3.5                  ] } ]
+            ]
           },
           {
-            "rows" : [// json level 2 start
-              [
-                {
-                  "speed" : 80,
-                  "distances" : [1, 6, 6]
-                }
-              ],
-              [
-                {
-                  "startDistance" : 1,
-                  "speed" : -50,
-                  "distances" : [-3.5, -3.5, -3.5, -7]
-                }
-              ],
-              [
-                {
-                  "speed" : 50,
-                  "distances" : [3.5]
-                }
-              ]
-            ]// json level 2 end
+            "levelstart" : 2,
+            "rows" : [
+              [ { "speed" :   80, "distances" : [ 1,    6              ] } ],
+              [ { "speed" :  -40, "distances" : [-2.8, -2.8, -2.8, -5.6] } ],
+              [ { "speed" :   40, "distances" : [ 2.8,  2.8,  2.8,  5.6] } ]
+            ]
           },
           {
-            "rows" : [// json level 3 start
-              [
-                {
-                  "speed" : 70,
-                  "distances" : [0.7, 0.7, 5]
-                }
-              ],
-              [
-                {
-                  "startDistance" : 1,
-                  "speed" : -55,
-                  "distances" : [-3.5, -3.5, -3.5, -7]
-                }
-              ],
-              [
-                {
-                  "speed" : 45,
-                  "distances" : [3.5]
-                }
-              ]
-            ]// json level 3 end
+            "levelstart" : 3,
+            "rows" : [
+              [ { "speed" :   70, "distances" : [ 1.4,  5              ] } ],
+              [ { "speed" :  -55, "distances" : [-2.8, -2.8, -2.8, -3.4] } ],
+              [ { "speed" :   45, "distances" : [ 3.1                  ] } ]
+            ]
           },
           {
-            "rows" : [// json level 99 start
-              [
-                {
-                  "speed" : 150,
-                  "distances" : [0.9, 0.9, 5]
-                }
-              ],
-              [
-                {
-                  "startDistance" : 1.2,
-                  "speed" : -75,
-                  "distances" : [-3.5, -3.5, -3.5, -7.5]
-                }
-              ],
-              [
-                {
-                  "speed" : 65,
-                  "distances" : [3.5, 3.5, 2.5]
-                }
-              ]
-            ]// json level 99 end
+            "levelstart" : 4,
+            "rows" : [
+              [ { "speed" :   70, "distances" : [ 1.4,  4              ] } ],
+              [ { "startDistance" : 0.7,
+                  "speed" :  -55, "distances" : [-2.8, -2.8, -2.8, -3.4] } ],
+              [ { "speed" :   45, "distances" : [ 3.1                  ] } ]
+            ]
           },
           {
-            "rows" : [// json level 1 start
-              [
-                {
-                  "speed" : 80,
-                  "distances" : [1, 6]
-                }
-              ],
-              [
-                {
-                  "speed" : -40,
-                  "distances" : [-2.8, -2.8, -2.8, -5.6]
-                }
-              ],
-              [
-                {
-                  "speed" : 40,
-                  "distances" : [2.8, 2.8, 2.8, 5.6]
-                }
-              ]
-            ]// json level 1 end
+            "levelstart" : 5,
+            "rows" : [
+              [ { "speed" :   75, "distances" : [ 1,    4,    1,    3  ] } ],
+              [ { "speed" :  -55, "distances" : [-3.5, -3.5, -3.5, -2.5] } ],
+              [ { "speed" :   50, "distances" : [ 2.5,  3.5,  3.5,  3.5] } ]
+            ]
+          },
+          {
+            "levelstart" : 6,
+            "rows" : [
+              [ { "speed" :   80, "distances" : [ 1,    4              ] } ],
+              [ { "speed" :  -50, "distances" : [-3,   -3,   -2,   -4  ] } ],
+              [ { "speed" :   50, "distances" : [ 3,    4,    2,    3  ] } ]
+            ]
+          },
+          {
+            "levelstart" : 7,
+            "rows" : [
+              [ { "speed" :   80, "distances" : [ 1.2,  4.2            ] } ],
+              [ { "speed" :  -55, "distances" : [-3.2, -2.8, -2.2, -3.8] } ],
+              [ { "speed" :   45, "distances" : [ 3,    4,    2,    3  ] } ]
+            ]
+          },
+          {
+            "levelstart" : 8,
+            "rows" : [
+              [ { "speed" :   80, "distances" : [ 1.4,  4.4            ] } ],
+              [ { "speed" :  -55, "distances" : [-3.2, -2.9, -2.1, -3.8] } ],
+              [ { "speed" :   45, "distances" : [ 3,    3,    2,    3  ] } ]
+            ]
+          },
+          {
+            "levelstart" : 9,
+            "rows" : [
+              [ { "speed" :   85, "distances" : [ 1.4,  4.4            ] } ],
+              [ { "startDistance" : -1.7,
+                  "speed" :  -55, "distances" : [-3.2, -2.9, -2.1, -3.8] } ],
+              [ { "speed" :   50, "distances" : [ 3,    3,    2,    3  ] } ]
+            ]
+          },
+          {
+            "levelstart" : 10,
+            "rows" : [
+              [ { "speed" :   90, "distances" : [ 1.4,  4.4            ] } ],
+              [ { "speed" :  -60, "distances" : [-3.2, -2.9, -2.1, -3.8] } ],
+              [ { "speed" :   50, "distances" : [ 3.5,  3,    1.5,  3  ] } ]
+            ]
+          },
+          {
+            "levelstart" : 11,
+            "rows" : [
+              [ { "speed" : -105, "distances" : [-1,   -6,   -6        ] } ],
+              [ { "startDistance" : 1,
+                  "speed" :   60, "distances" : [ 3.5,  3.5,  3.5,  7  ] } ],
+              [ { "speed" :  -60, "distances" : [-3.5                  ] } ]
+            ]
+          },
+          {
+            "levelstart" : 12,
+            "rows" : [
+              [ { "speed" : -105, "distances" : [-1,   -6              ] } ],
+              [ { "speed" :   50, "distances" : [ 2.8,  2.8,  2.8,  5.6] } ],
+              [ { "speed" :  -50, "distances" : [-2.8, -2.8, -2.8, -5.6] } ]
+            ]
+          },
+          {
+            "levelstart" : 13,
+            "rows" : [
+              [ { "speed" :  -95, "distances" : [-1.4, -5              ] } ],
+              [ { "speed" :   65, "distances" : [ 2.8,  2.8,  2.8,  3.4] } ],
+              [ { "speed" :  -55, "distances" : [-3.1                  ] } ]
+            ]
+          },
+          {
+            "levelstart" : 14,
+            "rows" : [
+              [ { "speed" :  -95, "distances" : [-1.4, -4              ] } ],
+              [ { "startDistance" : 0.7,
+                  "speed" :   65, "distances" : [ 2.8,  2.8,  2.8,  3.4] } ],
+              [ { "speed" :  -55, "distances" : [-3.1                  ] } ]
+            ]
+          },
+          {
+            "levelstart" : 15,
+            "rows" : [
+              [ { "speed" : -100, "distances" : [-1,   -4,   -1,   -3  ] } ],
+              [ { "speed" :   65, "distances" : [ 3.5,  3.5,  3.5,  2.5] } ],
+              [ { "speed" :  -60, "distances" : [-2.5, -3.5, -3.5, -3.5] } ]
+            ]
+          },
+          {
+            "levelstart" : 16,
+            "rows" : [
+              [ { "speed" : -105, "distances" : [-1,   -4              ] } ],
+              [ { "speed" :   60, "distances" : [ 3,    3,    2,    4  ] } ],
+              [ { "speed" :  -60, "distances" : [-3,   -4,   -2,   -3  ] } ]
+            ]
+          },
+          {
+            "levelstart" : 17,
+            "rows" : [
+              [ { "speed" : -105, "distances" : [-1.2, -4.2            ] } ],
+              [ { "speed" :   65, "distances" : [ 3.2,  2.8,  2.2,  3.8] } ],
+              [ { "speed" :  -55, "distances" : [-3,   -4,   -2,   -3  ] } ]
+            ]
+          },
+          {
+            "levelstart" : 18,
+            "rows" : [
+              [ { "speed" : -105, "distances" : [-1.4, -4.4            ] } ],
+              [ { "speed" :   65, "distances" : [ 3.2,  2.9,  2.1,  3.8] } ],
+              [ { "speed" :  -55, "distances" : [-3,   -3,   -2,   -3  ] } ]
+            ]
+          },
+          {
+            "levelstart" : 19,
+            "rows" : [
+              [ { "speed" : -110, "distances" : [-1.4, -4.4            ] } ],
+              [ { "startDistance" : -1.7,
+                  "speed" :   65, "distances" : [ 3.2,  2.9,  2.1,  3.8] } ],
+              [ { "speed" :  -60, "distances" : [-3,   -3,   -2,   -3  ] } ]
+            ]
+          },
+          {
+            "levelstart" : 20,
+            "rows" : [
+              [ { "speed" : -115, "distances" : [-1.4, -4.4            ] } ],
+              [ { "speed" :   70, "distances" : [ 3.2,  2.9,  2.1,  3.8] } ],
+              [ { "speed" :  -60, "distances" : [-3.5, -3,   -1.5, -3  ] } ]
+            ]
+          },
+          {
+            "levelstart" : 21,
+            "rows" : [
+              [ { "speed" :  120, "distances" : [ 1,    6,    6        ] } ],
+              [ { "startDistance" : 1,
+                  "speed" :  -70, "distances" : [-3.5, -3.5, -3.5, -7  ] } ],
+              [ { "speed" :   70, "distances" : [ 3.5                  ] } ]
+            ]
+          },
+          {
+            "levelstart" : 22,
+            "rows" : [
+              [ { "speed" :  110, "distances" : [ 1,    6              ] } ],
+              [ { "speed" :  -60, "distances" : [-2.8, -2.8, -2.8, -5.6] } ],
+              [ { "speed" :   60, "distances" : [ 2.8,  2.8,  2.8,  5.6] } ]
+            ]
+          },
+          {
+            "levelstart" : 23,
+            "rows" : [
+              [ { "speed" :  110, "distances" : [ 1.4,  5              ] } ],
+              [ { "speed" :  -75, "distances" : [-2.8, -2.8, -2.8, -3.4] } ],
+              [ { "speed" :   65, "distances" : [ 3.1                  ] } ]
+            ]
+          },
+          {
+            "levelstart" : 24,
+            "rows" : [
+              [ { "speed" :  110, "distances" : [ 1.4,  4              ] } ],
+              [ { "startDistance" : 0.7,
+                  "speed" :  -75, "distances" : [-2.8, -2.8, -2.8, -3.4] } ],
+              [ { "speed" :   65, "distances" : [ 3.1                  ] } ]
+            ]
+          },
+          {
+            "levelstart" : 25,
+            "rows" : [
+              [ { "speed" :  115, "distances" : [ 1,    4,    1,    3  ] } ],
+              [ { "speed" :  -75, "distances" : [-3.5, -3.5, -3.5, -2.5] } ],
+              [ { "speed" :   70, "distances" : [ 2.5,  3.5,  3.5,  3.5] } ]
+            ]
+          },
+          {
+            "levelstart" : 26,
+            "rows" : [
+              [ { "speed" :  120, "distances" : [ 1,    4              ] } ],
+              [ { "speed" :  -70, "distances" : [-3,   -3,   -2,   -4  ] } ],
+              [ { "speed" :   70, "distances" : [ 3,    4,    2,    3  ] } ]
+            ]
+          },
+          {
+            "levelstart" : 27,
+            "rows" : [
+              [ { "speed" :  120, "distances" : [ 1.2,  4.2            ] } ],
+              [ { "speed" :  -75, "distances" : [-3.2, -2.8, -2.2, -3.8] } ],
+              [ { "speed" :   65, "distances" : [ 3,    4,    2,    3  ] } ]
+            ]
+          },
+          {
+            "levelstart" : 28,
+            "rows" : [
+              [ { "speed" :  120, "distances" : [ 1.4,  4.4            ] } ],
+              [ { "speed" :  -75, "distances" : [-3.2, -2.9, -2.1, -3.8] } ],
+              [ { "speed" :   65, "distances" : [ 3,    3,    2,    3  ] } ]
+            ]
+          },
+          {
+            "levelstart" : 29,
+            "rows" : [
+              [ { "speed" :  125, "distances" : [ 1.4,  4.4            ] } ],
+              [ { "startDistance" : -1.7,
+                  "speed" :  -75, "distances" : [-3.2, -2.9, -2.1, -3.8] } ],
+              [ { "speed" :   70, "distances" : [ 3,    3,    2,    3  ] } ]
+            ]
+          },
+          {
+            "levelstart" : 30,
+            "rows" : [
+              [ { "speed" :  130, "distances" : [ 1.4,  4.4            ] } ],
+              [ { "speed" :  -80, "distances" : [-3.2, -2.9, -2.1, -3.8] } ],
+              [ { "speed" :   70, "distances" : [ 3.5,  3,    1.5,  3  ] } ]
+            ]
+          },
+          {
+            "levelstart" : 31,
+            "rows" : [
+              [ { "speed" :   75, "distances" : [ 1.4,  3.8,  3.2      ] } ],
+              [ { "speed" : -120, "distances" : [-3.2, -2.9, -2.1, -3.8] } ],
+              [ { "speed" :   60, "distances" : [ 2.5,  3.4,  1.3,  3  ] } ]
+            ]
+          },
+          {
+            "levelstart" : 99,
+            "rows" : [
+              [ { "speed" :  150, "distances" : [ 1.8,  5,    1.2,  4  ] } ],
+              [ { "speed" :  -75, "distances" : [-3.5, -3.5, -3.5, -5  ] } ],
+              [ { "speed" :   65, "distances" : [ 3.2,  3.2,  2.3      ] } ]
+            ]
           }
-        ],// json levels[] end
+        ],
         "reset" : {
           "expires" : { "writable": true, "configurable": true, "value": 0 },
           "currentPattern" :
@@ -2262,19 +2414,20 @@
       },
       "game" : {
         "levels" : [
-          {// json level 1 start
+          {
+            "levelstart" : 1,
             "length" : 60,
             "sizeFactor" : 0.5,
             "rewards" : {
-              "goal" : {
-                "score" : 100
-              },
-              "timeleft" : {
-                "score" : 10
-              },
-              "images/Gem Blue.png" : {
-                "score" : 5
-              }
+              "goal" :                              { "score" : 100   },
+              "timeleft" :                          { "score" :   4   },
+              "images/Gem Blue.png" :               { "score" :  20   },
+              "images/Gem Green.png" :              { "score" :  40   },
+              "images/Gem Orange.png" :             { "score" :  60   },
+              "images/Key.png" :                    { "score" :  80   },
+              "images/Heart.png" :                  { "lives" :   1   },
+              "images/Rock.png" :                   { "speed" :   0.5 },
+              "images/Star.png" :                   { "time" :   10   }
             },
             "goal" : [
               {
@@ -2284,124 +2437,339 @@
             ],
             "prizes" : [
               {
+                "desc" : "Blue; goal; < on shown; fail penalty",
                 "condition" : {
                   "when" : {
-                    "collected" : {
-                      "base" : 1,
-                      "fixed" : 1
-                    },
-                    "expired" : {
-                      "fixed" : 1
-                    },
-                    "increaseBy" : {
-                      "base" : 2
-                    }
+                    "collected" :       { "base" : 3, "fixed" : 1 },
+                    "expired" :         { "base" : 4 },
+                    "failed" :          { "base" : 3, "fixed" : 0.5,
+                                          "delta" : 0.5 },
+                    "elapsed" :         { "base" : 8 }
                   },
-                  "if" : {
-                    "occurrence" : .2,
-                    "limit" : 1
-                  }
+                  "if" :                { "limit" : 0.2 }
                 },
                 "constraints" : {
                   "tileIndex" : 0,
                   "row" : 0,
                   "col" : [1, 1, 1, 1, 1]
                 },
-                "time" : {
-                  "base" : 5
-                }
+                "time" :                { "base" : 7 }
               }
             ]
-          },// json level 1 end
-          {// json level 2 start
+          },
+          {
+            "levelstart" : 2,
             "sizeFactor" : 0.6,
             "rewards" : {
-              "goal" : {
-                "delta" : {
-                  "score" : 5
-                }
-              }
+              "goal" :                  { "delta" : { "score" :   5   } }
             }
-          },// json level 2 start
-          {// json level 3 start
+          },
+          {
+            "levelstart" : 3,
             "rewards" : {
-              "images/Gem Green.png" : {
-                "score" : 40
-              },
-              "goal" : {
-                "delta" : {
-                  "score" : 5
-                }
-              }
+              "goal" :                  { "delta" : { "score" :   5   } }
             },
             "prizes" : [
               {
+                "desc" : "Green; grass;",
                 "condition" : {
                   "when" : {
-                    "collected" : {
-                      "base" : 1,
-                      "fixed" : 1
-                    },
-                    "expired" : {
-                      "fixed" : 1
-                    },
-                    "increaseBy" : {
-                      "base" : 2
-                    }
+                    "collected" :       { "base" : 1, "fixed" : 1 },
+                    "expired" :         { "fixed" : 2 },
+                    "elapsed" :         { "base" : 5 },
+                    "checked" :         { "base" : 5 }
                   },
-                  "if" : {
-                    "occurrence" : .2,
-                    "limit" : 1
-                  }
-                },
-                "constraints" : {
-                  "tileIndex" : 0,
-                  "row" : 0,
-                  "col" : [1, 1, 1, 1, 1]
-                },
-                "time" : {
-                  "base" : 5
-                }
-              },
-              {
-                "condition" : {
-                  "when" : {
-                    "collected" : {
-                      "base" : 1,
-                      "fixed" : 1
-                    },
-                    "expired" : {
-                      "fixed" : 1
-                    },
-                    "increaseBy" : {
-                      "base" : 2
-                    }
-                  },
-                  "if" : {
-                    "occurrence" : 1,
-                    "limit" : 1
-                  }
+                  "if" :                { "limit" : 0.2 }
                 },
                 "constraints" : {
                   "tileIndex" : 1,
                   "row" : [0, 0, 0, 0, 1, 1],
                   "col" : [1, 1, 1, 1, 1]
                 },
-                "time" : {
-                  "base" : 7
-                }
+                "time" :                { "base" : 4 }
+              },
+              {
+                "desc" : "Blue; goal; < on shown; fail penalty",
+                "condition" : {
+                  "when" : {
+                    "collected" :       { "base" : 3, "fixed" : 1 },
+                    "expired" :         { "base" : 4 },
+                    "failed" :          { "base" : 3, "fixed" : 0.5,
+                                          "delta" : 0.5 },
+                    "elapsed" :         { "base" : 8 }
+                  },
+                  "if" :                { "limit" : 0.2 }
+                },
+                "constraints" : {
+                  "tileIndex" : 0,
+                  "row" : 0,
+                  "col" : [1, 1, 1, 1, 1]
+                },
+                "time" :                { "base" : 7 }
               }
             ]
-          },// json level 3 end
-          {// json level 99 start
+          },
+          {
+            "levelstart" : 4
+          },
+          {
+            "levelstart" : 5,
             "rewards" : {
-              "goal" : {
-                "delta" : {
-                  "score" : 1
-                }
+              "goal" :                  { "delta" : { "time" :   1   } }
+            },
+            "prizes" : [
+              {
+                "desc" : "Orange; traffic lanes; prefer edges",
+                "condition" : {
+                  "when" : {
+                    "collected" :       { "base" : 2, "fixed" : 0.6 },
+                    "failed" :          { "base" : 5, "fixed" : -0.5 },
+                    "elapsed" :         { "base" : 12 },
+                    "checked" :         { "base" : 5, "additional": 1.5 }
+                  },
+                  "if" :                { "limit" : 0.15 }
+                },
+                "constraints" : {
+                  "tileIndex" : 2,
+                  "row" : [0, 1, 1, 1, 0, 0],
+                  "col" : [1.5, 1, 1, 1, 1.5]
+                },
+                "time" :                { "base" : 8 }
+              },
+              {
+                "desc" : "Green; grass;",
+                "condition" : {
+                  "when" : {
+                    "collected" :       { "base" : 1, "fixed" : 1 },
+                    "expired" :         { "fixed" : 2 },
+                    "elapsed" :         { "base" : 5 },
+                    "checked" :         { "base" : 5 }
+                  },
+                  "if" :                { "limit" : 0.15 }
+                },
+                "constraints" : {
+                  "tileIndex" : 1,
+                  "row" : [0, 0, 0, 0, 1, 1],
+                  "col" : [1, 1, 1, 1, 1]
+                },
+                "time" :                { "base" : 4 }
+              },
+              {
+                "desc" : "Blue; goal; < on shown; fail penalty",
+                "condition" : {
+                  "when" : {
+                    "collected" :       { "base" : 3, "fixed" : 1 },
+                    "expired" :         { "base" : 4 },
+                    "failed" :          { "base" : 3, "fixed" : 0.5,
+                                          "delta" : 0.5 },
+                    "elapsed" :         { "base" : 8 }
+                  },
+                  "if" :                { "limit" : 0.15 }
+                },
+                "constraints" : {
+                  "tileIndex" : 0,
+                  "row" : 0,
+                  "col" : [1, 1, 1, 1, 1]
+                },
+                "time" :                { "base" : 7 }
               }
+            ]
+          },
+          {
+            "levelstart" : 6,
+            "rewards" : {
+              "timeleft" :              { "delta" : { "score" :   1   } }
             }
-          }// json level 99 end
+          },
+          {
+            "levelstart" : 7,
+            "prizes" : [
+              {
+                "desc" : "Blue+Green+Key; traffic lanes; prefer edges",
+                "condition" : {
+                  "when" : {
+                    "collected" :       { "base" : 2, "fixed" : 0.6 },
+                    "failed" :          { "base" : 5, "fixed" : -0.5 },
+                    "elapsed" :         { "base" : 12 },
+                    "checked" :         { "base" : 5, "additional": 1.5 }
+                  },
+                  "if" :                { "limit" : 0.2 }
+                },
+                "constraints" : {
+                  "tileIndex" : [3, 2, 0, 1],
+                  "row" : [0, 1, 1, 1, 0, 0],
+                  "col" : [1.5, 1, 1, 1, 1.5]
+                },
+                "time" :                { "base" : 8 }
+              },
+              {
+                "desc" : "Orange; goal; < on shown; fail penalty",
+                "condition" : {
+                  "when" : {
+                    "collected" :       { "base" : 3, "fixed" : 1 },
+                    "expired" :         { "base" : 4 },
+                    "failed" :          { "base" : 3, "fixed" : 0.5,
+                                          "delta" : 0.5 },
+                    "elapsed" :         { "base" : 8 }
+                  },
+                  "if" :                { "limit" : 0.2 }
+                },
+                "constraints" : {
+                  "tileIndex" : 2,
+                  "row" : 0,
+                  "col" : [1, 1, 1, 1, 1]
+                },
+                "time" :                { "base" : 7 }
+              }
+            ],
+            "rewards" : {
+              "score" :                 { "delta" : { "score" :   5   } }
+            }
+          },
+          {
+            "levelstart" : 8,
+            "rewards" : {
+              "images/Gem Blue.png" :   { "delta" : { "score" :   5   } }
+            }
+          },
+          {
+            "levelstart" : 9,
+            "rewards" : {
+              "images/Gem Green.png" :  { "delta" : { "score" :   5   } }
+            }
+          },
+          {
+            "levelstart" : 10,
+            "prizes" : [
+              {
+                "desc" : "Blue+Green+Key+Heart; traffic lanes; prefer edges",
+                "condition" : {
+                  "when" : {
+                    "collected" :       { "base" : 2, "fixed" : 0.6 },
+                    "failed" :          { "base" : 5, "fixed" : -0.5 },
+                    "elapsed" :         { "base" : 12 },
+                    "checked" :         { "base" : 5, "additional": 1.5 }
+                  },
+                  "if" :                { "limit" : 0.25 }
+                },
+                "constraints" : {
+                  "tileIndex" : [3, 2, 0, 1, 1],
+                  "row" : [0, 1, 1, 1, 0, 0],
+                  "col" : [1.5, 1, 1, 1, 1.5]
+                },
+                "time" :                { "base" : 8 }
+              },
+              {
+                "desc" : "Orange; goal; < on shown; fail penalty",
+                "condition" : {
+                  "when" : {
+                    "collected" :       { "base" : 3, "fixed" : 1 },
+                    "expired" :         { "base" : 4 },
+                    "failed" :          { "base" : 3, "fixed" : 0.5,
+                                          "delta" : 0.5 },
+                    "elapsed" :         { "base" : 8 }
+                  },
+                  "if" :                { "limit" : 0.15 }
+                },
+                "constraints" : {
+                  "tileIndex" : 2,
+                  "row" : 0,
+                  "col" : [1, 1, 1, 1, 1]
+                },
+                "time" :                { "base" : 7 }
+              }
+            ]
+          },
+          {
+            "levelstart" : 11,
+            "rewards" : {
+              "images/Gem Orange.png" :  { "delta" : { "score" :   5   } }
+            }
+          },
+          {
+            "levelstart" : 12,
+            "rewards" : {
+              "images/Key.png" :        { "delta" : { "score" :   5   } }
+            }
+          },
+          {
+            "levelstart" : 13,
+            "prizes" : [
+              {
+                "desc" : "multiple; goal; < on shown; fail penalty",
+                "condition" : {
+                  "when" : {
+                    "collected" : {
+                      "desc" : "2..5 + (1..3 * times shown) after any collect",
+                      "base" : 2,
+                      "additional" : 3,
+                      "fixed" : 1,
+                      "delta" : 2
+                    },
+                    "expired" : {
+                      "desc" : "1..6 + (1..3 * times shown) after any expire",
+                      "base" : 1,
+                      "additional" : 5,
+                      "fixed" : 1,
+                      "delta" : 2
+                    },
+                    "failed" : {
+                      "desc" : "3..6 after if bool check failed",
+                      "base" : 3,
+                      "additional" : 3
+                    },
+                    "elapsed" :         { "base" : 15 },
+                    "checked" :         { "base" : 5 }
+                  },
+                  "if" :                { "limit" : 0.1, "fixed" : 0.02 }
+                },
+                "constraints" : {
+                  "desc" : "not time or speed; goal; prefer edge columns",
+                  "tileIndex" : [15, 10, 5, 3, 1, 0, 0],
+                  "row" : 0,
+                  "col" : [2, 1, 1, 1, 2]
+                },
+                "time" : {
+                  "desc" : "show for 10 seconds first time, reduce for repeats",
+                  "base" : 10,
+                  "fixed" : -1,
+                  "delta" : -2
+                }
+              },
+              {
+                "desc" : "all (not speed); enemies",
+                "condition" : {
+                  "when" : {
+                    "checked" : {
+                      "desc" : "3..5 after previous checked limit",
+                      "base" : 3,
+                      "additional" : 2
+                    },
+                    "elapsed" : {
+                      "desc" : "none allowed for first 15 seconds of level",
+                      "base" : 15
+                    },
+                    "expired" : {
+                      "desc" : "no check for 3 seconds after shown prize expires",
+                      "base" : 3
+                    }
+                  },
+                  "if" : {
+                    "desc" : "10% chance until shown, 2% less after shown",
+                    "fixed" : -0.02,
+                    "limit" : 0.1
+                  }
+                },
+                "constraints" : {
+                  "desc" : "any but speed; enemy rows; prefer edge cols",
+                  "tileIndex" : [50, 40, 20, 10, 1, 0, 5],
+                  "row" : [0, 1, 1, 1, 0, 0],
+                  "col" : [1.5, 1, 1, 1, 1.5]
+                },
+                "time" :                { "base" : 5 }
+              }
+            ]
+          }
         ]
       },
       "hud" : {
@@ -2465,12 +2833,12 @@
           },
           "level" : {
             "text" : "Level:",
-            "left" : 195,
+            "left" : 185,
             "maxWidth" : 70
           },
           "score" : {
             "text" : "Score:",
-            "left" : 330,
+            "left" : 310,
             "maxWidth" : 75
           },
           "lives" : {
@@ -2486,7 +2854,7 @@
             "align" : "right",
             "margin" : {
               "left" : 5,
-              "right" : 15
+              "right" : 10
             }
           },
           "level" : {
@@ -2521,6 +2889,135 @@
         }
       }
     };// ./APP_CONFIG = {}
+    this.private.dataTemplates = {
+      "enemy" : {
+        "levels" : [
+          {
+            "levelstart" : 999,// Only for developer tagging while editing
+            "sizeFactor" : 1.0,// Sprite size for collisions (times cell width)
+            "baseSpeed" : 1,
+            "fillSpeed" : 5,// Time speedup factor while filling canvas
+            "rows" : [// one entry (another array) per enemy row
+              // Currently only using/allowing a single pattern per row+level
+              // so each (inner) array contains only a single configuration obj
+              [ { "speed" :   40, "distances" : [ 2.8,  2.8,  2.8,  5.6] } ]
+            ]
+          },
+          "more levels"
+        ]
+      },
+      "game" : {
+        "levels" : [
+          {
+            "levelstart" : 999,// Only for developer tagging while editing
+            "length" : 60,// Level length (seconds); only needed for first level
+            "sizeFactor" : 0.5,// Sprite size for collisions (times cell width)
+            "rewards" : {
+              "goal" :                              { "score" : 100   },
+              "timeleft" :                          { "score" :   4   },
+              "images/Gem Blue.png" :               { "score" :  20   },
+              "images/Gem Green.png" :              { "score" :  40   },
+              "images/Gem Orange.png" :             { "score" :  60   },
+              "images/Key.png" :                    { "score" :  80   },
+              "images/Heart.png" :                  { "lives" :   1   },
+              "images/Rock.png" :                   { "speed" :   0.5 },
+              "images/Star.png" :                   { "time" :   10   },
+              "any rewards property" : {
+                "score" : 1,// points value
+                "lives" : 1,// number of lives to add
+                "time" : 1,// seconds to add to the current level
+                "speed" : 0.5,// factor to slow enemy sprites by (not implement)
+                "delta" : {
+                  "score" : 1,// change to current points value
+                  "lives" : 1,// change to current number of lives to add
+                  "time" : 1,// change to current seconds to add to the level
+                  "speed" : 0.5,// change to current speed
+                  "more" : "more delta keys"
+                },
+                "more" : "more rewards"
+              }
+            },
+            "prizes" : [// prizes that might be collected for the current level
+              "prize configuration object",
+              {
+                "prizestart" : "description",// Only for developer editing tagging
+                "condition" : {
+                  "when" : {
+                    "collected" :       "delta time configuration object",
+                    "expired" :         "delta time configuration object",
+                    "failed" :          "delta time configuration object",
+                    "elapsed" :         "delta time configuration object",
+                    "checked" :         "delta time configuration object",
+                    "more" : "when properties"
+                  },
+                  "if" :                "boolean configuration object",
+                  "more" : "condition properties"
+                },
+                "constraints" : {
+                  "tileIndex" : "index selection object",
+                  "row" : "index selection object",
+                  "col" : "index selection object",
+                  "minDistance" : {// Minimum separation from avatar
+                    "total" : 1,
+                    "horizontal" : 0,
+                    "vertical" : 0,
+                    "more" : "minDistance properties"
+                  },
+                  "more" : "constraints properties"
+                },
+                "time" :                "delta time configuration object",
+                "more" : "prize configuration properties"
+              },
+              "more prize description objects"
+            ],
+            "more" : "level property objects"
+          },
+          "more levels"
+        ]
+      },
+      "more" : "template sections",
+      "index selection object" : {
+        "property0" : 0,// actual index number
+        "property1" : [],// array of numeric weights:
+          // chance index = n is weight[n]/sum weights
+          // array needs index 0, plus entries to max index care about
+        "property2" : "any and only one of above"
+      },
+      "samples" : {
+        "game" : {
+          "levels" : {
+            "rewards" : {
+              "goal" :                  { "delta" : { "score" :   5   } },
+              "timeleft" :              { "delta" : { "score" :   1   } },
+              "images/Gem Blue.png" :   { "delta" : { "score" :   5   } },
+              "images/Gem Green.png" :  { "delta" : { "score" :   5   } },
+              "images/Gem Orange.png" : { "delta" : { "score" :   5   } },
+              "images/Key.png" :        { "delta" : { "score" :   5   } },
+              "images/Heart.png" :      { "delta" : { "lives" :   1   } },
+              "images/Rock.png" :       { "delta" : { "speed" :   0.1 } },
+              "images/Star.png" :       { "delta" : { "time"  :   2   } }
+            }
+          }
+        }
+      },
+      "delta time configuration object" : {
+        "base" : 0,
+        "additional" : 0,
+        "fixed" : 0,
+        "delta" : 0,
+        "result" :
+          "(fixed + delta * rnd()) * previous + base + additional * rnd()"
+      },
+      "boolean configuration object" : {
+        "weight" : 1,
+        "fixed" : 0,
+        "delta" : 0,
+        "limit" : 0.5,
+        "result" : "(fixed + delta * rnd()) * previous + weight * rnd() < limit"
+      },
+      "more2" : "object template descriptions"
+    };
+
 
     // Create read-only 'level' calculated property
     Object.defineProperty(this, "level", {
@@ -2680,8 +3177,12 @@
       if (this.state === ENUMS.STATE.running) {
         this.lvlIndex += 1;
         this.lives += 1;
+        this.reason = 'and resurrected jumping levels';
         this.state = ENUMS.STATE.dieing;
       }
+      break;
+    case 'numtimes':// DEBUG; cheat code
+      this.lives += 1;
       break;
     }
   };// ./function Frogger.prototype.handleCommand(request)
@@ -2724,7 +3225,8 @@
   /**
    * Determine a time (offset) value from a configuration object
    *
-   * obj = { base : 0, additional : 0 }
+   * obj = { base : 0, additional : 0, fixed : 0, delta : 0 }
+   * result = (fixed + delta * rnd()) * previous + base + additional * rnd()
    *
    * @param {Object} obj        Object with time configuration properties
    * @param {Integer} previous  number of times the prize has already been shown
@@ -2743,20 +3245,22 @@
   /**
    * Determine a boolean value from a configuration object
    *
-   * obj = { occurrence : 0, limit : 0 }
+   * obj = { weight : 1, fixed : 0, delta : 0, limit : 0.5 }
+   * result = (fixed + delta * rnd()) * previous + weight * rnd() < limit"
    *
    * @param {Object} obj        Object with test configuration properties
-   * @param {Integer} count     number of times the prize has already been shown
+   * @param {Integer} previous  number of times the prize has already been shown
    * @return {boolean}
    */
-  Frogger.prototype.parseBoolConfig = function (obj, count) {
+  Frogger.prototype.parseBoolConfig = function (obj, previous) {
     if (obj === undefined) {
       // No configuration object ==> always
       return true;
     }
-    return (obj.occurrence || 0) * count + Math.random() < obj.limit;
-
-  };// ./function Frogger.prototype.parseBoolConfig(obj, count)
+    return ((obj.fixed || 0) + (obj.delta || 0) * Math.random()) * previous +
+      (obj.weight === undefined ? 1 : obj.weight) * Math.random() <
+      (obj.limit === undefined ? 0.5 : obj.limit);
+  };// ./function Frogger.prototype.parseBoolConfig(obj, previous)
 
   /**
    * Prep the prize rule information
@@ -2770,7 +3274,8 @@
     for (rule = 0; rule < rules.length; rule += 1) {
       rules[rule].timesShown = 0;// The prize has never been displayed
       if (rules[rule].condition && rules[rule].condition.when) {
-        rules[rule].condition.when.failureTime = null;
+        rules[rule].condition.when.failureTime = undefined;
+        rules[rule].condition.when.checkTime = undefined;
       }
     }// ./for (rule = 0; rule < rules.length; rule += 1)
 
@@ -2808,22 +3313,42 @@
   };// ./function Frogger.prototype.pickIndex(obj)
 
   /**
-   * Determine how long to wait before queueing another prize
+   * Determine how long to wait before queueing another prize for a rule
+   *
+   * Each (used) property of the rule parameter is used to limit how soon the
+   * next instance of the prize could be check to see if it will be shown.
+   *   collected    Minimum time since any prize was collected
+   *   expired      Minimum time since any shown prize expired
+   *   failed       Minimum time since current rule failed to show prize
+   *   checked      Minimum time since last check for the current rule
+   *   elasped      Minimum elapsed (running) time for the current level
    *
    * @param {Object} rule       properties are delta time rule objects
    * @param {Integer} previous  number of times the prize has already been shown
    * @return {Number}
    */
   Frogger.prototype.prizeWaitTime = function (rule, previous) {
-    var cTime, eTime, fTime, cBase, eBase, fBase;
-    cBase = this.pendingPrize.collectionTime || -999;
-    eBase = this.pendingPrize.expirationTime || -999;
-    fBase = rule.failureTime || -999;
-    cTime = cBase + this.parseTimeConfig(rule.collected, previous);
-    eTime = eBase + this.parseTimeConfig(rule.expired, previous);
-    fTime = fBase + this.parseTimeConfig(rule.failed, previous);
-    return Math.max(cTime, eTime, fTime, 0) + this.
-      parseTimeConfig(rule.increaseBy, previous);
+    var bCollect, bExpire, bFail, bCheck, mCheck,
+      tCollect, tExpire, tFail, tCheck, tElapse;
+    // Get the base time referene points
+    bCollect = this.pendingPrize.collectionTime || -999;// Far past
+    bExpire = this.pendingPrize.expirationTime || -999;
+    // Different for failure because zero is a valid (previous) time
+    bFail = rule.failureTime === undefined ? -999 : rule.failureTime;
+    bCheck = rule.checkTime || 0;// Limit to use THIS calculation
+    // Get the offsets from the base reference times values
+    tCollect = bCollect + this.parseTimeConfig(rule.collected, previous);
+    tExpire = bExpire + this.parseTimeConfig(rule.expired, previous);
+    tFail = bFail + this.parseTimeConfig(rule.failed, previous);
+    // No accumulated for Elapsed: just direct offset from zero
+    tElapse = this.parseTimeConfig(rule.elapsed, previous);
+    mCheck = Math.max(tCollect, tExpire, tFail, tElapse);
+    tCheck = this.parseTimeConfig(rule.checked, previous) +
+      this.elapsedTimes[ENUMS.STATE.running];
+    // Save new checked time reference for NEXT limit
+    rule.checkTime = Math.max(mCheck, tCheck);
+    // Pick the last / highest limit
+    return Math.max(mCheck, bCheck);
   };// ./function Frogger.prototype.prizeWaitTime(rule, previous)
 
   /**
@@ -2845,25 +3370,22 @@
       minWait = this.
         prizeWaitTime(rules[rIdx].condition.when, rules[rIdx].timesShown);
       if (minWait < this.pendingPrize.showAt) {
-        this.pendingPrize.checkAt = minWait;
+        this.pendingPrize.checkAt =
+          Math.max(minWait, rules[rIdx].condition.when.checkTime);
         canShow = this.
           parseBoolConfig(rules[rIdx].condition.if, rules[rIdx].timesShown);
         if (canShow) {
           this.pendingPrize.showAt = minWait;
           this.pendingPrize.rule = rIdx;
         } else {
-          // Record the failure
-          rules[rIdx].condition.when.failureTime =
-            this.elapsedTimes[ENUMS.STATE.running];
+          // Record the failure, only after actual "if" condition check
+          rules[rIdx].condition.when.failureTime = minWait;
         }
       }
     }// ./for (rIdx = 0; rIdx < rules.length; rIdx += 1)
 
     if (this.pendingPrize.rule === null) { return; }
 
-    // Need to handle case where no prize was currently found to show, but an
-    // attempt (this or previous call) was made that failed: need to check
-    // again later, after failureTime expires
     rule = rules[this.pendingPrize.rule];
     this.pendingPrize.tileIndex = this.APP_CONFIG.prizes.tileIndex +
       this.pickIndex(rule.constraints.tileIndex);
@@ -2880,7 +3402,7 @@
    * @return {undefined}
    */
   Frogger.prototype.loadSettings = function () {
-    var gamConfig, lvlConfig;
+    var gamConfig, lvlConfig, minSpeed, row;
     gamConfig = this.APP_CONFIG.game.levels[this.lvlIndex];
     lvlConfig = this.APP_CONFIG.enemy.levels[this.lvlIndex];
 
@@ -2900,9 +3422,6 @@
         this.currentSettings.goal = gamConfig.goal;
       }
 
-      // Update the available prize rewards to use for the level
-      // nestedConfigUpdate.
-      //   call(gamConfig, this.currentSettings, ENUMS.SETTINGS.prizes);
       if (gamConfig.prizes) {
         delete this.currentSettings.prizes;
         // Need copy, since (easiest) processing updates information
@@ -2922,9 +3441,15 @@
     this.currentSettings.enemy.sizeFactor = configUpdate.call(lvlConfig,
       this.currentSettings.enemy.sizeFactor, ENUMS.SETTINGS.sizeFactor
       );
-    this.currentSettings.fillTime = configUpdate.call(lvlConfig,
-      this.currentSettings.fillTime, ENUMS.SETTINGS.fillTime
-      );
+    minSpeed = 9999;
+    for (row = 0; row < lvlConfig.rows.length; row += 1) {
+      minSpeed = Math.min(minSpeed, Math.abs(lvlConfig.rows[row][0].speed));
+    }
+    // Enough time to get the slowest enemy sprite almost across the canvas.
+    // Tweaked to prevent immediate straight up alignment with many of the
+    // enemy movement patterns.
+    this.currentSettings.fillTime = this.GAME_BOARD.cellSize.width *
+      (this.GAME_BOARD.gridCols - 0.5) / minSpeed;
     this.currentSettings.baseSpeed = configUpdate.call(lvlConfig,
       this.currentSettings.baseSpeed, ENUMS.SETTINGS.baseSpeed
       );
@@ -3157,6 +3682,7 @@
     document.addEventListener('keyup', function (e) {
       var allowedKeys = {
         107: 'numplus',// DEBUG; cheat code
+        106: 'numtimes',// DEBUG; cheat code
         32: 'space',
         37: 'left',
         38: 'up',

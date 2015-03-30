@@ -14,6 +14,7 @@ This demonstrates the use of:
 * communication though custom events
 * smooth animation on html5 canvas
 * finite state machine
+* a simple DSL (domain specific language) for enemy patterns and showing prizes
 
 See the live application running at
 http://mmerlin.github.io/frontend-nanodegree-arcade-game/
@@ -36,11 +37,35 @@ Usage Notes
 A cheat code (key) has been added to advance levels quickly for viewing.  The
 way the level information can carry forward though means there are limitations.
 To 'level up', start a level (the clock is running), then press the plus (+) key
-on the numeric keypad.  That will increase the level, add a life, then kill the
-avatar.  Press the space bar to abort the death message, space again to start
-the new level, and wait for the sped up filling to finish.  Repeat to get to the
-target level.  This sequence is needed to make sure that the cascading level
-configuration gets carried forward correctly.
+on the numeric keypad.  That will increase the level by one, add a life, then
+kill the avatar.  Press the space bar to abort the death message, space again to
+start the new level, and wait for the sped up filling to finish.  Repeat to get
+to the target level.  This sequence is needed to make sure that the cascading
+level prize configuration gets carried forward correctly.
+
+Another cheat key was added to aid in testing.  The times / star (*) key on the
+numeric keypad adds lives without doing anything else.  It can be used almost
+any time before 'game over'.
+
+Limitations
+===========
+When 'long' enemies are sometimes created by overlapping more than one sprite,
+the order they are drawn by the animation engine determines which graphic is on
+top.  The way that the circular queue of instances is being used, that means
+different ones in the set are on top at different times.  This does not affect
+play or collision detection.  Just the appearance.  We'll call it a 'feature',
+instead of a bug :)  At least any particular set is consistent.  The appearance
+is not going to change part way across the canvas.
+- I think all of those cases are gone now.  Sprites can 'tailgate', but they do not overlap any more.
+
+Prizes are being shown, but it is not really working 'as designed'.  The
+interaction between the various 'when' conditions is not quite what I want.
+Time is running out for any more tweaks.
+
+In someways, this is way to easy.  I am not a gamer, but I can get through all
+32 defined levels using only a couple of lives.  Of course, the real frogger
+was the same, if you only had to get across the traffic.  Crossing the water was
+where I normally died.
 
 Future version enhancements
 ===========================
@@ -65,22 +90,25 @@ Ideas:
 setStateNewlevel
 Look at other alternatives for getting board 'filled' with enemies before allowing Avatar to move, or clock to start
 Ideas:
-- wait until enemy crosses board
--- any/all/last(slowest) row
--- 'nose' touches far side
--- less than (player) sizeFactor from far edge
--- Could jump time to get to 'filled' state
---- loop Frogger.prototype.next until conditions satisfied, render optional
-- ignore 'start' command until board has been filled
-- change messaging to show [not] ready
 - new 'fastForward' state to handle processing
 -- instead of checking elapsedTimes.timeSpeed
+- accel/decel time factor for smoother transitions
+- use avatar canvas width - cell width * (enemy sizeFactor + avatar sizeFactor) as target to fill canvas
 
 Frogger.prototype.initPattern
 Handle more pattern scenarios
 - change pattern mid level
 - start first enemy of new pattern (distance) behind last visible sprite
 - change speed, and handle 'tailgate' conditions with previous pattern
+
+Frogger.prototype.loadSettings + APP_CONFIG.game.levels[].prizes
+Need to workout a cascading structure, so that prize configuration does not have
+to be completely repeated for any level that changes ANYTHING related to prizes.
+Should be able to add a new prize, or change the chance of showing an existing
+one without having to duplicate everything.  The defaulting and update will be
+more complex than the other implemented cascades, but still practical.
+- provide each (modifiable) object instance with an id to be match to for changes
+- ability to add (beginning or end), delete full prize rule, as well as [sub] properties
 
 Frogger.prototype.playerEnemyCheck
 check how much overlap there is on a collision, and adjust the displayed message.  If little overlap, probably the avatar was sitting still, and the enemy ran them over (hit and run).  If the overlap is large, probably the avatar moved, running into the enemy (suicide by enemy).
@@ -118,6 +146,11 @@ Frogger.prototype.handleCommand, 'keyup' event listener
 Consider adding state specific keyboard commands
 - could use numbers to directly select avatars
 - go to select processing one command after game over
+
+Frogger.prototype.handleCommand, 'keyup' event listener
+Add a code (key sequence) to enable the existing cheat codes, so that they are
+not easily discoverable by accident.
+- include timing in the sequence, so need slow / fast to get in.
 
 Expand animation engine code
 - Interface also/more using events
